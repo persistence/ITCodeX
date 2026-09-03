@@ -1,0 +1,7 @@
+server:
+  address: ":8000"
+  serverRoot: "public"
+  openapiPath: "/api.json"
+logger:
+  level: "info"
+  stdout: true
