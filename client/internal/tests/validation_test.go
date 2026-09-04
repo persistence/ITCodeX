@@ -15,7 +15,7 @@ func TestValidation_Required(t *testing.T) {
 
 	collName := "test_val_required"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
 	_, err := s.client.Create(s.ctx, collName, map[string]interface{}{
@@ -30,7 +30,7 @@ func TestValidation_Unique(t *testing.T) {
 
 	collName := "test_val_unique"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "code", Type: "string", Required: true, Unique: true},
+		client.CreateFieldInput{Name: "code", Type: "string", IsRequired: true, IsUnique: true},
 	)
 
 	_, err := s.client.Create(s.ctx, collName, map[string]interface{}{
@@ -49,7 +49,7 @@ func TestValidation_Email(t *testing.T) {
 
 	collName := "test_val_email"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "email", Type: "email", Required: true},
+		client.CreateFieldInput{Name: "email", Type: "email", IsRequired: true},
 	)
 
 	_, err := s.client.Create(s.ctx, collName, map[string]interface{}{
@@ -63,7 +63,7 @@ func TestCreate_WithAllFields(t *testing.T) {
 
 	collName := "test_val_all"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "name", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "name", Type: "string", IsRequired: true},
 		client.CreateFieldInput{Name: "email", Type: "email"},
 		client.CreateFieldInput{Name: "age", Type: "integer"},
 		client.CreateFieldInput{Name: "active", Type: "boolean"},

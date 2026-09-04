@@ -138,7 +138,7 @@ func (c *Collection) AddField(ctx context.Context, input CreateFieldInput) error
 	opts["displayName"] = input.DisplayName
 	opts["required"] = input.IsRequired
 	opts["unique"] = input.IsUnique
-	opts["indexed"] = input.IsUnique
+	opts["indexed"] = input.IsIndexed
 	opts["isSystem"] = input.IsSystem
 	opts["length"] = input.Length
 	if input.Options != nil {
@@ -165,7 +165,7 @@ func (c *Collection) AddField(ctx context.Context, input CreateFieldInput) error
 	if c.db != nil && !c.isNew {
 		optionsJson, _ := json.Marshal(opts)
 		query := fmt.Sprintf(`INSERT INTO "%s_fields" (collection_name, name, type, display_name, is_required, is_unique, is_indexed, options, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, c.db.TablePrefix())
-		_, err := c.db.db.Exec(ctx, query, c.name, input.Name, string(input.Type), input.DisplayName, input.IsRequired, input.IsUnique, input.IsUnique, string(optionsJson), input.Sort)
+		_, err := c.db.db.Exec(ctx, query, c.name, input.Name, string(input.Type), input.DisplayName, input.IsRequired, input.IsUnique, input.IsIndexed, string(optionsJson), input.Sort)
 		if err != nil {
 			return NewSystemError(err)
 		}

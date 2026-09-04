@@ -48,6 +48,13 @@ func (v *CELValidator) ValidateRecord(ctx context.Context, coll *Collection, dat
 			if err := field.ValidateValue(ctx, value); err != nil {
 				validationErr.AddFieldError(fieldName, err.Error())
 			}
+
+			// unique check
+			if field.IsUnique() && !field.IsSystem() {
+				if err := checkUnique(ctx, coll, fieldName, value, oldData); err != nil {
+					validationErr.AddFieldError(fieldName, err.Error())
+				}
+			}
 		}
 
 		if exists {
@@ -170,4 +177,33 @@ func (v *CELValidator) ClearCache() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.cache = make(map[string]*cel.Program)
+}
+
+// checkUnique verifies that the given field value does not already exist in the collection.
+// When updating, oldData is used to exclude the current record from the uniqueness check.
+func checkUnique(ctx context.Context, coll *Collection, fieldName string, value interface{}, oldData map[string]interface{}) error {
+	if coll.Db() == nil || coll.Db().db == nil {
+		return nil
+	}
+
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE "%s" = ?`, coll.TableName(), fieldName)
+	args := []interface{}{value}
+
+	// when updating, exclude self
+	if oldData != nil {
+		if oldID, ok := oldData[DefaultPrimaryKey]; ok && oldID != nil {
+			query += fmt.Sprintf(` AND "%s" != ?`, DefaultPrimaryKey)
+			args = append(args, oldID)
+		}
+	}
+
+	var count int
+	row := coll.Db().DB().QueryRow(ctx, query, args...)
+	if err := row.Scan(&count); err != nil {
+		return NewSystemError(err)
+	}
+	if count > 0 {
+		return fmt.Errorf("该字段值已存在，必须唯一")
+	}
+	return nil
 }

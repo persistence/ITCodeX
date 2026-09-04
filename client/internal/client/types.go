@@ -35,9 +35,9 @@ type CreateFieldInput struct {
 	Name         string                 `json:"name"`
 	DisplayName  string                 `json:"displayName"`
 	Type         string                 `json:"type"`
-	Required     bool                   `json:"required,omitempty"`
-	Unique       bool                   `json:"unique,omitempty"`
-	Indexed      bool                   `json:"indexed,omitempty"`
+	IsRequired   bool                   `json:"isRequired,omitempty"`
+	IsUnique     bool                   `json:"isUnique,omitempty"`
+	IsIndexed    bool                   `json:"isIndexed,omitempty"`
 	DefaultValue interface{}            `json:"defaultValue,omitempty"`
 	Options      map[string]interface{} `json:"options,omitempty"`
 }

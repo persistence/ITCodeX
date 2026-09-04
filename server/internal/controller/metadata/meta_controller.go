@@ -3,6 +3,7 @@ package metadata
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -93,7 +94,7 @@ func (mc *MetaController) Collections(r *ghttp.Request) {
 
 func (mc *MetaController) CreateCollection(r *ghttp.Request) {
 	var input md.CreateCollectionInput
-	if err := r.Parse(&input); err != nil {
+	if err := json.Unmarshal(r.GetBody(), &input); err != nil {
 		r.Response.WriteHeader(http.StatusBadRequest)
 		r.Response.WriteJson(g.Map{"code": 1, "message": err.Error()})
 		return
@@ -182,7 +183,7 @@ func (mc *MetaController) AddField(r *ghttp.Request) {
 	}
 
 	var input md.CreateFieldInput
-	if err := r.Parse(&input); err != nil {
+	if err := json.Unmarshal(r.GetBody(), &input); err != nil {
 		r.Response.WriteHeader(http.StatusBadRequest)
 		r.Response.WriteJson(g.Map{"code": 1, "message": err.Error()})
 		return

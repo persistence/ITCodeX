@@ -75,10 +75,22 @@ func (r *GenericRepository) applyFieldSelection(opts *CommonOptions) []Field {
 		exceptSet[e] = true
 	}
 
+	// Ensure primary key and timestamp fields are always available when explicit fields are selected
+	ensureSet := map[string]bool{DefaultPrimaryKey: true}
+	for _, sysName := range []string{"created_at", "updated_at"} {
+		if r.coll.HasField(sysName) {
+			ensureSet[sysName] = true
+		}
+	}
+
 	if len(opts.Fields) > 0 {
 		fieldSet := make(map[string]bool)
 		for _, f := range opts.Fields {
 			fieldSet[f] = true
+		}
+		// also include the "ensure" fields
+		for k := range ensureSet {
+			fieldSet[k] = true
 		}
 		var result []Field
 		for _, f := range allFields {

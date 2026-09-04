@@ -16,7 +16,7 @@ func TestCreate_SingleRecord(t *testing.T) {
 
 	collName := "test_crud_create"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 		client.CreateFieldInput{Name: "views", Type: "integer"},
 	)
 
@@ -36,7 +36,7 @@ func TestGet_Exists(t *testing.T) {
 
 	collName := "test_crud_get"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
 	created := s.createTestRecord(t, collName, map[string]interface{}{
@@ -44,7 +44,7 @@ func TestGet_Exists(t *testing.T) {
 	})
 
 	id := fmt.Sprintf("%v", created["id"])
-	fetched, err := s.client.Get(s.ctx, collName, id, nil)
+	fetched, err := s.client.FindOne(s.ctx, collName, id, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "获取测试", fetched["title"])
 	assert.Equal(t, created["id"], fetched["id"])
@@ -58,7 +58,7 @@ func TestGet_NotFound(t *testing.T) {
 		client.CreateFieldInput{Name: "title", Type: "string"},
 	)
 
-	_, err := s.client.Get(s.ctx, collName, "999999", nil)
+	_, err := s.client.FindOne(s.ctx, collName, "999999", nil)
 	require.Error(t, err)
 	assert.True(t, s.isAPIError(err, http.StatusNotFound))
 }
@@ -68,7 +68,7 @@ func TestList_DefaultPagination(t *testing.T) {
 
 	collName := "test_crud_list"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
 	for i := 0; i < 5; i++ {
@@ -90,7 +90,7 @@ func TestList_CustomPagination(t *testing.T) {
 
 	collName := "test_crud_list_page"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
 	for i := 0; i < 10; i++ {
@@ -115,8 +115,8 @@ func TestUpdate_Success(t *testing.T) {
 
 	collName := "test_crud_update"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
-		client.CreateFieldInput{Name: "views", Type: "number"},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
+		client.CreateFieldInput{Name: "views", Type: "integer"},
 	)
 
 	created := s.createTestRecord(t, collName, map[string]interface{}{
@@ -132,10 +132,10 @@ func TestUpdate_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "更新后的标题", updated["title"])
 
-	fetched, err := s.client.Get(s.ctx, collName, id, nil)
+	fetched, err := s.client.FindOne(s.ctx, collName, id, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "更新后的标题", fetched["title"])
-	assert.Equal(t, float64(200), fetched["views"])
+	assert.Equal(t, int64(200), fetched["views"])
 }
 
 func TestUpdate_NotFound(t *testing.T) {
@@ -157,7 +157,7 @@ func TestDelete_Success(t *testing.T) {
 
 	collName := "test_crud_delete"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "title", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
 	created := s.createTestRecord(t, collName, map[string]interface{}{
@@ -169,7 +169,7 @@ func TestDelete_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), affected)
 
-	_, err = s.client.Get(s.ctx, collName, id, nil)
+	_, err = s.client.FindOne(s.ctx, collName, id, nil)
 	require.Error(t, err)
 }
 
@@ -215,7 +215,7 @@ func TestCount_Success(t *testing.T) {
 
 	collName := "test_crud_count"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "name", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "name", Type: "string", IsRequired: true},
 	)
 
 	for i := 0; i < 8; i++ {

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -73,4 +74,24 @@ func (s *TestSuite) isAPIError(err error, statusCode int) bool {
 		return false
 	}
 	return apiErr.Code == statusCode
+}
+
+func asFloat64(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	default:
+		return 0
+	}
 }

@@ -41,25 +41,16 @@ func (c *Client) List(ctx context.Context, collection string, opts *FindOptions)
 		}
 	}
 
-	data, err := c.Get(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), params)
+	resp, err := c.get(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), params)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonBytes, err := toJSON(data)
-	if err != nil {
-		return nil, err
-	}
-
-	var result ListResult
-	if err := fromJSON(jsonBytes, &result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	m, _ := resp.(map[string]interface{})
+	return parseListResult(m["data"])
 }
 
-func (c *Client) Get(ctx context.Context, collection, id string, opts *FindOneOptions) (map[string]interface{}, error) {
+func (c *Client) FindOne(ctx context.Context, collection, id string, opts *FindOneOptions) (map[string]interface{}, error) {
 	params := make(map[string]string)
 
 	if opts != nil {
@@ -72,69 +63,55 @@ func (c *Client) Get(ctx context.Context, collection, id string, opts *FindOneOp
 		}
 	}
 
-	data, err := c.Get(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), params)
+	resp, err := c.get(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), params)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonBytes, err := toJSON(data)
-	if err != nil {
-		return nil, err
+	m, _ := resp.(map[string]interface{})
+	record, ok := m["data"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
 	}
-
-	var record map[string]interface{}
-	if err := fromJSON(jsonBytes, &record); err != nil {
-		return nil, err
-	}
-
 	return record, nil
 }
 
 func (c *Client) Create(ctx context.Context, collection string, data map[string]interface{}) (map[string]interface{}, error) {
-	respData, err := c.Post(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), data)
+	resp, err := c.post(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), data)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonBytes, err := toJSON(respData)
-	if err != nil {
-		return nil, err
+	m, _ := resp.(map[string]interface{})
+	record, ok := m["data"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
 	}
-
-	var record map[string]interface{}
-	if err := fromJSON(jsonBytes, &record); err != nil {
-		return nil, err
-	}
-
 	return record, nil
 }
 
 func (c *Client) Update(ctx context.Context, collection, id string, data map[string]interface{}) (map[string]interface{}, error) {
-	respData, err := c.Put(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), data)
+	resp, err := c.put(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), data)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonBytes, err := toJSON(respData)
-	if err != nil {
-		return nil, err
+	m, _ := resp.(map[string]interface{})
+	record, ok := m["data"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
 	}
-
-	var record map[string]interface{}
-	if err := fromJSON(jsonBytes, &record); err != nil {
-		return nil, err
-	}
-
 	return record, nil
 }
 
 func (c *Client) DeleteOne(ctx context.Context, collection, id string) (int64, error) {
-	respData, err := c.doRequest(ctx, "DELETE", fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), nil, nil)
+	resp, err := c.del(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), nil)
 	if err != nil {
 		return 0, err
 	}
 
-	return extractAffected(respData), nil
+	m, _ := resp.(map[string]interface{})
+	return asInt64(m["affected"]), nil
 }
 
 func (c *Client) BulkDelete(ctx context.Context, collection string, filter Filter) (int64, error) {
@@ -148,12 +125,13 @@ func (c *Client) BulkDelete(ctx context.Context, collection string, filter Filte
 		params["filter"] = string(filterBytes)
 	}
 
-	respData, err := c.doRequest(ctx, "DELETE", fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), nil, params)
+	resp, err := c.del(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), params)
 	if err != nil {
 		return 0, err
 	}
 
-	return extractAffected(respData), nil
+	m, _ := resp.(map[string]interface{})
+	return asInt64(m["affected"]), nil
 }
 
 func (c *Client) Count(ctx context.Context, collection string, filter Filter) (int64, error) {
@@ -180,11 +158,36 @@ func joinStrings(items []string, sep string) string {
 	return result
 }
 
-func extractAffected(data interface{}) int64 {
-	if m, ok := data.(map[string]interface{}); ok {
-		if affected, ok := m["affected"].(float64); ok {
-			return int64(affected)
+func parseListResult(data interface{}) (*ListResult, error) {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		if data == nil {
+			return &ListResult{}, nil
+		}
+		return nil, fmt.Errorf("unexpected list response type: %T", data)
+	}
+	result := &ListResult{}
+	if v, ok := m["total"]; ok {
+		result.Total = asInt64(v)
+	}
+	if v, ok := m["page"]; ok {
+		result.Page = int(asInt64(v))
+	}
+	if v, ok := m["pageSize"]; ok {
+		result.PageSize = int(asInt64(v))
+	}
+	if v, ok := m["totalPages"]; ok {
+		result.TotalPages = int(asInt64(v))
+	}
+	if v, ok := m["list"]; ok {
+		if list, ok := v.([]interface{}); ok {
+			result.List = make([]map[string]interface{}, 0, len(list))
+			for _, item := range list {
+				if rec, ok := item.(map[string]interface{}); ok {
+					result.List = append(result.List, rec)
+				}
+			}
 		}
 	}
-	return 0
+	return result, nil
 }

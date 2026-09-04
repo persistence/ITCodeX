@@ -46,11 +46,20 @@ func (cc *CRUDController) Handle(r *ghttp.Request) {
 
 	repo := coll.Repository()
 	method := r.Method
+	// Normalize numeric IDs (Snowflake int64) so that SQL comparison works correctly
+	var idVal interface{}
+	if id != "" {
+		if v, err := strconv.ParseInt(id, 10, 64); err == nil {
+			idVal = v
+		} else {
+			idVal = id
+		}
+	}
 
 	switch method {
 	case http.MethodGet:
 		if id != "" {
-			cc.handleGet(r, repo, id)
+			cc.handleGet(r, repo, idVal)
 		} else {
 			cc.handleList(r, repo)
 		}
@@ -62,10 +71,10 @@ func (cc *CRUDController) Handle(r *ghttp.Request) {
 			r.Response.WriteJson(g.Map{"code": 1, "message": "更新操作需要ID"})
 			return
 		}
-		cc.handleUpdate(r, repo, id)
+		cc.handleUpdate(r, repo, idVal)
 	case http.MethodDelete:
 		if id != "" {
-			cc.handleDestroy(r, repo, id)
+			cc.handleDestroy(r, repo, idVal)
 		} else {
 			cc.handleBulkDestroy(r, repo)
 		}
@@ -75,10 +84,10 @@ func (cc *CRUDController) Handle(r *ghttp.Request) {
 	}
 }
 
-func (cc *CRUDController) handleGet(r *ghttp.Request, repo md.Repository, id string) {
+func (cc *CRUDController) handleGet(r *ghttp.Request, repo md.Repository, idVal interface{}) {
 	ctx := r.Context()
 	opts := &md.FindOneOptions{}
-	opts.FilterByTk = id
+	opts.FilterByTk = idVal
 	if fields := r.GetQuery("fields").String(); fields != "" {
 		opts.Fields = splitAndTrim(fields)
 	}
@@ -181,10 +190,13 @@ func (cc *CRUDController) handleList(r *ghttp.Request, repo md.Repository) {
 func (cc *CRUDController) handleCreate(r *ghttp.Request, repo md.Repository) {
 	ctx := r.Context()
 	var values map[string]interface{}
-	if err := r.Parse(&values); err != nil {
+	if err := json.Unmarshal(r.GetBody(), &values); err != nil {
 		r.Response.WriteHeader(http.StatusBadRequest)
 		r.Response.WriteJson(g.Map{"code": 1, "message": "请求体解析失败: " + err.Error()})
 		return
+	}
+	if values == nil {
+		values = make(map[string]interface{})
 	}
 
 	opts := &md.CreateOptions{Values: values}
@@ -198,17 +210,20 @@ func (cc *CRUDController) handleCreate(r *ghttp.Request, repo md.Repository) {
 	r.Response.WriteJson(g.Map{"code": 0, "data": record.Data()})
 }
 
-func (cc *CRUDController) handleUpdate(r *ghttp.Request, repo md.Repository, id string) {
+func (cc *CRUDController) handleUpdate(r *ghttp.Request, repo md.Repository, idVal interface{}) {
 	ctx := r.Context()
 	var values map[string]interface{}
-	if err := r.Parse(&values); err != nil {
+	if err := json.Unmarshal(r.GetBody(), &values); err != nil {
 		r.Response.WriteHeader(http.StatusBadRequest)
 		r.Response.WriteJson(g.Map{"code": 1, "message": "请求体解析失败: " + err.Error()})
 		return
 	}
+	if values == nil {
+		values = make(map[string]interface{})
+	}
 
 	opts := &md.UpdateOptions{
-		FilterByTk: id,
+		FilterByTk: idVal,
 		Values:     values,
 	}
 	record, affected, err := repo.Update(ctx, opts)
@@ -224,9 +239,9 @@ func (cc *CRUDController) handleUpdate(r *ghttp.Request, repo md.Repository, id 
 	})
 }
 
-func (cc *CRUDController) handleDestroy(r *ghttp.Request, repo md.Repository, id string) {
+func (cc *CRUDController) handleDestroy(r *ghttp.Request, repo md.Repository, idVal interface{}) {
 	ctx := r.Context()
-	opts := &md.DestroyOptions{FilterByTk: id}
+	opts := &md.DestroyOptions{FilterByTk: idVal}
 	affected, err := repo.Destroy(ctx, opts)
 	if err != nil {
 		handleCrudError(r, err)

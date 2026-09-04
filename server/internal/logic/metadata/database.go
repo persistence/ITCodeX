@@ -400,7 +400,7 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 		opts["displayName"] = fi.DisplayName
 		opts["required"] = fi.IsRequired
 		opts["unique"] = fi.IsUnique
-		opts["indexed"] = fi.IsUnique
+		opts["indexed"] = fi.IsIndexed
 		opts["isSystem"] = fi.IsSystem
 		opts["length"] = fi.Length
 		if fi.Options != nil {
@@ -441,7 +441,7 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 		fOpts := f.Options()
 		optsJson, _ := json.Marshal(fOpts)
 		_, err := d.db.Exec(ctx, fmt.Sprintf(`INSERT INTO "%s_fields" (collection_name, name, type, display_name, is_required, is_unique, is_indexed, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, prefix),
-			coll.name, f.Name(), f.Type(), f.DisplayName(), f.IsRequired(), f.IsUnique(), f.IsUnique(), string(optsJson))
+			coll.name, f.Name(), f.Type(), f.DisplayName(), f.IsRequired(), f.IsUnique(), f.IsIndexed(), string(optsJson))
 		if err != nil {
 			return nil, NewSystemError(err)
 		}

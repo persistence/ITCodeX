@@ -41,7 +41,7 @@ func TestCreateCollection_WithFields(t *testing.T) {
 			Name:        "title",
 			DisplayName: "标题",
 			Type:        "string",
-			Required:    true,
+			IsRequired:  true,
 		},
 		{
 			Name:        "content",
@@ -176,7 +176,7 @@ func TestListFields_Success(t *testing.T) {
 	collName := "test_list_fields"
 	_ = s.createTestCollection(t, collName,
 		client.CreateFieldInput{Name: "f1", Type: "string"},
-		client.CreateFieldInput{Name: "f2", Type: "number"},
+		client.CreateFieldInput{Name: "f2", Type: "integer"},
 	)
 
 	fields, err := s.client.ListFields(s.ctx, collName)

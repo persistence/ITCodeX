@@ -61,6 +61,7 @@ type CreateFieldInput struct {
 	IsSystem         bool                   `json:"isSystem,omitempty"`
 	IsRequired       bool                   `json:"isRequired,omitempty"`
 	IsUnique         bool                   `json:"isUnique,omitempty"`
+	IsIndexed        bool                   `json:"isIndexed,omitempty"`
 	DefaultValue     interface{}            `json:"defaultValue,omitempty"`
 	Description      string                 `json:"description,omitempty"`
 	Sort             int                    `json:"sort,omitempty"`

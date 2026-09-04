@@ -77,15 +77,12 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var apiResp struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data"`
-		Errors  interface{} `json:"errors"`
-	}
+	var apiResp map[string]interface{}
 
 	if len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, &apiResp); err != nil {
+		dec := json.NewDecoder(bytes.NewReader(respBody))
+		dec.UseNumber()
+		if err := dec.Decode(&apiResp); err != nil {
 			if resp.StatusCode >= 400 {
 				return nil, &APIError{
 					Code:    resp.StatusCode,
@@ -95,12 +92,17 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 			return nil, fmt.Errorf("failed to parse response: %w, body: %s", err, string(respBody))
 		}
 	}
+	if apiResp == nil {
+		apiResp = make(map[string]interface{})
+	}
+
+	apiResp = normalizeNumbers(apiResp).(map[string]interface{})
 
 	if resp.StatusCode >= 400 {
 		apiErr := &APIError{
 			Code:    resp.StatusCode,
-			Message: apiResp.Message,
-			Data:    apiResp.Errors,
+			Message: toString(apiResp["message"]),
+			Data:    apiResp["errors"],
 		}
 		if apiErr.Message == "" {
 			apiErr.Message = string(respBody)
@@ -108,29 +110,87 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		return nil, apiErr
 	}
 
-	if apiResp.Code != 0 && apiResp.Code != 200 && apiResp.Code != 201 {
+	codeVal, _ := apiResp["code"]
+	codeNum := asInt64(codeVal)
+	if codeNum != 0 && codeNum != 200 && codeNum != 201 {
 		return nil, &APIError{
-			Code:    apiResp.Code,
-			Message: apiResp.Message,
-			Data:    apiResp.Errors,
+			Code:    int(codeNum),
+			Message: toString(apiResp["message"]),
+			Data:    apiResp["errors"],
 		}
 	}
 
-	return apiResp.Data, nil
+	return apiResp, nil
 }
 
-func (c *Client) Get(ctx context.Context, path string, params map[string]string) (interface{}, error) {
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func asInt64(v interface{}) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case int32:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case float32:
+		return int64(n)
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+	}
+	return 0
+}
+
+// normalizeNumbers converts json.Number values to int64 or float64 for ease of use.
+func normalizeNumbers(v interface{}) interface{} {
+	switch val := v.(type) {
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			return i
+		}
+		if f, err := val.Float64(); err == nil {
+			return f
+		}
+		return val.String()
+	case map[string]interface{}:
+		for k, vv := range val {
+			val[k] = normalizeNumbers(vv)
+		}
+		return val
+	case []interface{}:
+		for i, vv := range val {
+			val[i] = normalizeNumbers(vv)
+		}
+		return val
+	default:
+		return v
+	}
+}
+
+func (c *Client) get(ctx context.Context, path string, params map[string]string) (interface{}, error) {
 	return c.doRequest(ctx, http.MethodGet, path, nil, params)
 }
 
-func (c *Client) Post(ctx context.Context, path string, body interface{}) (interface{}, error) {
+func (c *Client) post(ctx context.Context, path string, body interface{}) (interface{}, error) {
 	return c.doRequest(ctx, http.MethodPost, path, body, nil)
 }
 
-func (c *Client) Put(ctx context.Context, path string, body interface{}) (interface{}, error) {
+func (c *Client) put(ctx context.Context, path string, body interface{}) (interface{}, error) {
 	return c.doRequest(ctx, http.MethodPut, path, body, nil)
 }
 
-func (c *Client) Delete(ctx context.Context, path string, params map[string]string) (interface{}, error) {
+func (c *Client) del(ctx context.Context, path string, params map[string]string) (interface{}, error) {
 	return c.doRequest(ctx, http.MethodDelete, path, nil, params)
 }

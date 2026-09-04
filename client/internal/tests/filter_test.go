@@ -12,7 +12,7 @@ import (
 func setupFilterTestCollection(t *testing.T, s *TestSuite) string {
 	collName := "test_filter_coll"
 	s.createTestCollection(t, collName,
-		client.CreateFieldInput{Name: "name", Type: "string", Required: true},
+		client.CreateFieldInput{Name: "name", Type: "string", IsRequired: true},
 		client.CreateFieldInput{Name: "age", Type: "integer"},
 		client.CreateFieldInput{Name: "score", Type: "integer"},
 		client.CreateFieldInput{Name: "status", Type: "string"},
@@ -67,7 +67,7 @@ func TestFilter_Gt(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
-		assert.Greater(t, r["age"].(float64), float64(30))
+		assert.Greater(t, asFloat64(r["age"]), float64(30))
 	}
 }
 
@@ -80,7 +80,7 @@ func TestFilter_Gte(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
-		assert.GreaterOrEqual(t, r["age"].(float64), float64(30))
+		assert.GreaterOrEqual(t, asFloat64(r["age"]), float64(30))
 	}
 }
 
@@ -93,7 +93,7 @@ func TestFilter_Lt(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
-		assert.Less(t, r["age"].(float64), float64(28))
+		assert.Less(t, asFloat64(r["age"]), float64(28))
 	}
 }
 
@@ -106,7 +106,7 @@ func TestFilter_Lte(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
-		assert.LessOrEqual(t, r["age"].(float64), float64(28))
+		assert.LessOrEqual(t, asFloat64(r["age"]), float64(28))
 	}
 }
 
@@ -176,7 +176,7 @@ func TestSort_Ascending(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for i := 1; i < len(result.List); i++ {
-		assert.LessOrEqual(t, result.List[i-1]["age"].(float64), result.List[i]["age"].(float64))
+		assert.LessOrEqual(t, asFloat64(result.List[i-1]["age"]), asFloat64(result.List[i]["age"]))
 	}
 }
 
@@ -189,7 +189,7 @@ func TestSort_Descending(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for i := 1; i < len(result.List); i++ {
-		assert.GreaterOrEqual(t, result.List[i-1]["age"].(float64), result.List[i]["age"].(float64))
+		assert.GreaterOrEqual(t, asFloat64(result.List[i-1]["age"]), asFloat64(result.List[i]["age"]))
 	}
 }
 
