@@ -1,2 +1,48 @@
-server/metadata-server.exe
+# --- IDE / Editor ---
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Go ---
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+coverage.out
+coverage.html
+vendor/
+
+# --- Build / temp ---
+bin/
+dist/
+tmp/
+**/tmp/
+server/_pkg/
+client/_pkg/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Env / secrets (keep *.example tracked) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!*.key.example
+
+# --- Local overrides ---
+**/manifest/config/config.local.yaml
+**/manifest/config/config.*.local.yaml
