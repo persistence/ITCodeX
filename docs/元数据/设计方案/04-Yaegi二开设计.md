@@ -1,8 +1,9 @@
 # ITCodeX 元数据模块 - Yaegi 二次开发设计
 
-> 版本: v1.0
-> 日期: 2026-09-03
+> 版本: v1.2
+> 日期: 2026-09-05
 > 技术: Yaegi (Go 语言解释器)
+> 钩子与自定义 API 中间件放在 `internal/service/middleware`，由 `internal/cmd` 注册。自定义 API 保持通配路由，不为脚本生成 `g.Meta`。
 
 ## 1. 设计目标
 
@@ -526,17 +527,19 @@ func (m *YaegiManager) ExecuteHook(ctx context.Context, collection, hook string,
 
 ### 5.3 钩子执行中间件（GoFrame）
 
+放在 `internal/service/middleware`。CRUD 钩子由 Repository 在 create/update/destroy 前后调用更稳妥；HTTP 中间件只做上下文注入。自定义 API 仍走 `/api/custom/*` 通配，不在 `g.Meta` 里为每个脚本建路由。错误通过 `gerror` 返回，交给 `MiddlewareHandlerResponse`，不要手写 `WriteJson` 作为主路径。
+
 ```go
 package middleware
 
 import (
     "github.com/gogf/gf/v2/net/ghttp"
 
-    "your-module/metadata/yaegi"
+    "itcodex/server/internal/service/metadata"
 )
 
-// YaegiCRUDMiddleware CRUD钩子中间件
-func YaegiCRUDMiddleware(yaegiMgr *yaegi.YaegiManager) func(r *ghttp.Request) {
+// YaegiCRUDMiddleware 可选。优先在 Repository 内调钩子；此处仅示意 HTTP 接入。
+func YaegiCRUDMiddleware(db *metadata.Database) func(r *ghttp.Request) {
     return func(r *ghttp.Request) {
         collectionName := r.GetRouterString("collection")
         if collectionName == "" {

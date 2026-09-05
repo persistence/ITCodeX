@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "goframe-v2": {
+      "source": "gogf/skills",
+      "sourceType": "github",
+      "skillPath": "skills/goframe-v2/SKILL.md",
+      "computedHash": "5c5bdc56aff88360a0a562f8741b97b8a3485a75981fca849ec9dc4f1fdd5f73"
+    }
+  }
+}

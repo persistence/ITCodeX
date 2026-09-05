@@ -1,0 +1,13 @@
+# GoFrame CLI. 只为系统表生成 dao/do/entity，不要对业务 Collection 执行 gf gen dao。
+gfcli:
+  gen:
+    dao:
+      - link: "mysql:root:123456@tcp(127.0.0.1:3306)/itcodex"
+        tables: "c_collections,c_fields,c_indexes,c_yaegi_scripts"
+        removePrefix: "c_"
+        jsonCase: "CamelLower"
+        descriptionTag: true
+    ctrl:
+      srcFolder: "api"
+      dstFolder: "internal/controller"
+      clear: false

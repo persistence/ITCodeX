@@ -1,8 +1,11 @@
 # ITCodeX 元数据模块 - API 接口设计
 
-> 版本: v1.0
-> 日期: 2026-09-03
-> 框架: GoFrame (ghttp)
+> 版本: v1.2
+> 日期: 2026-09-05
+> 框架: GoFrame v2（`g.Meta` + `ghttp` + `MiddlewareHandlerResponse`）
+>
+> 本文是 **HTTP API**。[api/](../api/) 是 NocoBase JS SDK 参考，不在本服务中实现 JS 绑定。
+> 路由与目录见 [06](./06-项目结构设计.md)。GoFrame 边界见 [README](./README.md#goframe-使用边界)。
 
 ## 1. API 总览
 
@@ -11,6 +14,38 @@
 | 元数据管理 | `/api/meta/*` | Collection 和 Field 的增删改查 |
 | 标准 CRUD | `/api/c/:collection/*` | 动态生成的数据表操作接口 |
 | 自定义 API | `/api/custom/*` | Yaegi 脚本提供的自定义接口 |
+
+### JS SDK 与 HTTP 对照
+
+| JS Repository / Database | HTTP | 阶段 |
+|--------------------------|------|------|
+| `repository.find(opts)` | `GET /api/c/:collection` | 一 |
+| `repository.findOne` / `filterByTk` | `GET /api/c/:collection/:id` | 一 |
+| `repository.count` | `GET /api/c/:collection/count` | 一 |
+| `repository.create` | `POST /api/c/:collection` | 一 |
+| `repository.createMany` | `POST /api/c/:collection/batch` | 一 |
+| `repository.update` + `filterByTk` | `PUT /api/c/:collection/:id` | 一 |
+| `repository.update` + `filter` | `PUT /api/c/:collection?filter=` | 一 |
+| `repository.destroy` | `DELETE /api/c/:collection/:id` | 一 |
+| `fields` / `except` / `sort` / `page` | Query 同名参数 | 一 |
+| `appends`、关联过滤 `posts.title` | 同左；实现见第三阶段 | 三 |
+| 关联 add/set/remove | `/api/c/:collection/:id/:association` | 三 |
+| `db.registerOperators` | 进程内 `RegisterOperator`，不单独暴露 HTTP | 一 |
+| `db.addMigration` / `sync` 选项全集 | 启动 Bootstrap + 建表/加列，无迁移框架 | 一 |
+
+### GoFrame 落地方式
+
+| 接口 | 定义 | 路由 | 参数校验 |
+|------|------|------|----------|
+| `/api/meta/*` | `api/metadata/v1` 的 Req/Res，带 `g.Meta` | `group.Bind(controller)` | `v:` 标签（page、name 等） |
+| `/api/c/:collection/*` | 不按表生成 `g.Meta` | `/c` 组显式注册 | Query/JSON 解析；**记录**由 CEL + 元数据校验 |
+| `/api/custom/*` | Yaegi 脚本 | 通配路由 | 由脚本处理 |
+
+Controller 签名：`(ctx context.Context, req *v1.XxxReq) (res *v1.XxxRes, err error)`。
+
+统一响应由 `ghttp.MiddlewareHandlerResponse` 输出，对应 `ghttp.DefaultHandlerResponse`（`code` / `message` / `data`）。业务错误用 `gerror`；领域码（404/409/403/422）用 `gcode` 映射。不要在 Controller 里手写 `WriteHeader` + `WriteJson` 作为主路径。
+
+OpenAPI / Swagger：`server.openapiPath`、`server.swaggerPath`，由 `g.Meta` 生成。
 
 所有接口统一返回格式：
 
@@ -363,11 +398,23 @@ GET /api/c/:collection
     "id": { "$in": [1, 2, 3] }
 }
 
-// 关联字段过滤
+// 关联字段过滤（第三阶段）
 {
     "posts.title": { "$like": "%公告%" }
 }
 ```
+
+### Filter 操作符分期
+
+一期实现（与当前代码对齐）：
+
+`$eq` `$ne` `$gt` `$gte` `$lt` `$lte` `$in` `$notIn` `$like` `$notLike` `$isNull` `$notNull` `$between` `$notBetween` `$startsWith` `$endsWith`，以及逻辑 `$and` `$or` `$not`。
+
+二期：`$empty` `$notEmpty` `$includes` `$notIncludes`。
+
+**不做**（除非单独立项）：`$col` `$is`/`$not`（列比较语义）`$exists` `$dateOn` 等日期族、`$match`/`$anyOf` 等数组族、`$iLike`/`$regexp`。
+
+`appends` 与 `posts.title` 关联过滤：第三阶段；接口参数先保留，未实现时忽略或返回明确错误。
 
 **响应示例:**
 ```json
@@ -461,9 +508,9 @@ DELETE /api/c/:collection/:id
 ```
 DELETE /api/c/:collection?filter={...}
 ```
-**注意:** 如果不带 filter，将清空表（需要truncate权限）
+**注意:** 不带 filter 时视为 truncate。本模块无独立权限体系，由网关/调用方约束；服务端可加配置开关禁止无条件清空。
 
-### 3.9 关联操作
+### 3.9 关联操作（第三阶段）
 ```
 // 查询关联数据
 GET /api/c/:collection/:id/:association
@@ -516,6 +563,8 @@ POST /api/custom/global/export
 自定义 API 的请求和响应完全由 Yaegi 脚本控制，但建议遵循统一的 JSON 响应格式。
 
 ## 5. 字段类型与表单映射参考
+
+下表是 **目标目录**（对齐需求 Interface），按 [设计方案总览](./README.md#需求--api--设计决策--阶段) 分期实现，不是当前已全部落地。
 
 | Interface类型 | 数据类型 | 表单组件 | 说明 |
 |--------------|----------|----------|------|
