@@ -27,7 +27,6 @@ type DatabaseOptions struct {
 	TablePrefix   string `json:"tablePrefix,omitempty"`
 	Logging       bool   `json:"logging,omitempty"`
 	DSN           string `json:"dsn,omitempty"`
-	StoragePath   string `json:"storagePath,omitempty"`
 	ScriptsPath   string `json:"scriptsPath,omitempty"`
 	AllowTruncate bool   `json:"allowTruncate,omitempty"`
 }
