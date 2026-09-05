@@ -29,6 +29,7 @@ type DatabaseOptions struct {
 	DSN           string `json:"dsn,omitempty"`
 	ScriptsPath   string `json:"scriptsPath,omitempty"`
 	AllowTruncate bool   `json:"allowTruncate,omitempty"`
+	EncryptKey    string `json:"encryptKey,omitempty"`
 }
 
 type CollectionOptions struct {

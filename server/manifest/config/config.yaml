@@ -29,3 +29,4 @@ metadata:
   defaultPrimaryKey: "snowflake"
   allowTruncate: false
   logging: true
+  encryptKey: "itcodex-default-encrypt-key"

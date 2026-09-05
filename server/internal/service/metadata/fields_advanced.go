@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -188,6 +189,22 @@ func NewPhoneField(coll *Collection, opts map[string]interface{}) (Field, error)
 
 type JSONField struct {
 	BaseField
+}
+
+func (f *JSONField) ToStoreValue(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+	switch value.(type) {
+	case string, []byte:
+		return value, nil
+	default:
+		b, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		return string(b), nil
+	}
 }
 
 func NewJSONField(coll *Collection, opts map[string]interface{}) (Field, error) {

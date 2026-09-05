@@ -28,3 +28,18 @@ type ScriptDisableReq struct {
 	Id     int64 `json:"id" p:"id" v:"required"`
 }
 type ScriptDisableRes struct{}
+
+type ScriptDeleteReq struct {
+	g.Meta `path:"/scripts/{id}" method:"delete" tags:"Meta" summary:"删除 Yaegi 脚本"`
+	Id     int64 `json:"id" p:"id" v:"required"`
+}
+type ScriptDeleteRes struct{}
+
+type ScriptValidateReq struct {
+	g.Meta  `path:"/scripts/validate" method:"post" tags:"Meta" summary:"校验 Yaegi 脚本"`
+	Content string `json:"content" v:"required"`
+}
+type ScriptValidateRes struct {
+	Valid bool   `json:"valid"`
+	Error string `json:"error,omitempty"`
+}

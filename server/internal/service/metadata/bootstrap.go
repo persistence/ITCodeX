@@ -19,6 +19,7 @@ func OptionsFromConfig(ctx context.Context) DatabaseOptions {
 		ScriptsPath:   g.Cfg().MustGet(ctx, "metadata.scriptsPath").String(),
 		AllowTruncate: g.Cfg().MustGet(ctx, "metadata.allowTruncate").Bool(),
 		Logging:       g.Cfg().MustGet(ctx, "metadata.logging").Bool(),
+		EncryptKey:    g.Cfg().MustGet(ctx, "metadata.encryptKey").String(),
 	}
 }
 
@@ -27,9 +28,10 @@ func MustBootstrap(ctx context.Context) *Database {
 	if err != nil {
 		g.Log().Fatal(ctx, "创建数据库失败:", err)
 	}
+	// Attach Yaegi before Bootstrap so loadEnabledScripts can run during Bootstrap.
+	db.SetYaegi(NewYaegiManager(db))
 	if err := db.Bootstrap(ctx); err != nil {
 		g.Log().Fatal(ctx, "初始化数据库失败:", err)
 	}
-	db.SetYaegi(NewYaegiManager(db))
 	return db
 }

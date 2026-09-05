@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -43,17 +44,63 @@ func parseID(raw string) interface{} {
 	return raw
 }
 
+func parseJSONBody(raw []byte) (interface{}, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var body interface{}
+	if err := dec.Decode(&body); err != nil {
+		return nil, err
+	}
+	return normalizeJSONNumbers(body), nil
+}
+
+func normalizeJSONNumbers(v interface{}) interface{} {
+	switch val := v.(type) {
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			return i
+		}
+		if f, err := val.Float64(); err == nil {
+			return f
+		}
+		return val.String()
+	case map[string]interface{}:
+		for k, vv := range val {
+			val[k] = normalizeJSONNumbers(vv)
+		}
+		return val
+	case []interface{}:
+		for i, vv := range val {
+			val[i] = normalizeJSONNumbers(vv)
+		}
+		return val
+	default:
+		return v
+	}
+}
+
 func parseFilter(r *ghttp.Request) (md.Filter, bool) {
 	filterStr := r.GetQuery("filter").String()
 	if filterStr == "" {
 		return nil, true
 	}
-	var f md.Filter
-	if err := json.Unmarshal([]byte(filterStr), &f); err != nil {
+	dec := json.NewDecoder(bytes.NewReader([]byte(filterStr)))
+	dec.UseNumber()
+	var raw interface{}
+	if err := dec.Decode(&raw); err != nil {
 		writeFail(r, http.StatusBadRequest, 1, "filter 参数必须是有效的JSON", nil)
 		return nil, false
 	}
-	return f, true
+	raw = normalizeJSONNumbers(raw)
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		writeFail(r, http.StatusBadRequest, 1, "filter 参数必须是 JSON 对象", nil)
+		return nil, false
+	}
+	return md.Filter(m), true
 }
 
 func applyQuerySelection(r *ghttp.Request, opts *md.CommonOptions) {
@@ -72,6 +119,9 @@ func applyQuerySelection(r *ghttp.Request, opts *md.CommonOptions) {
 			}
 		}
 		opts.Sort = sort
+	}
+	if appends := r.GetQuery("appends").String(); appends != "" {
+		opts.Appends = splitAndTrim(appends)
 	}
 }
 
@@ -298,6 +348,79 @@ func (cc *CRUDController) DestroyMany(r *ghttp.Request) {
 		return
 	}
 	writeOK(r, map[string]interface{}{"affected": affected})
+}
+
+func (cc *CRUDController) AssociationList(r *ghttp.Request) {
+	repo, ok := cc.repo(r)
+	if !ok {
+		return
+	}
+	// Use router params only — query ?id= must not shadow path :id
+	list, err := repo.ListAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String())
+	if err != nil {
+		writeLogicError(r, err)
+		return
+	}
+	writeOK(r, map[string]interface{}{"list": list})
+}
+
+func (cc *CRUDController) AssociationAdd(r *ghttp.Request) {
+	repo, ok := cc.repo(r)
+	if !ok {
+		return
+	}
+	body, err := parseJSONBody(r.GetBody())
+	if err != nil {
+		writeFail(r, http.StatusBadRequest, 1, "invalid json body", nil)
+		return
+	}
+	if err := repo.AddAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
+		writeLogicError(r, err)
+		return
+	}
+	writeOK(r, map[string]interface{}{"ok": true})
+}
+
+func (cc *CRUDController) AssociationSet(r *ghttp.Request) {
+	repo, ok := cc.repo(r)
+	if !ok {
+		return
+	}
+	body, err := parseJSONBody(r.GetBody())
+	if err != nil {
+		writeFail(r, http.StatusBadRequest, 1, "invalid json body", nil)
+		return
+	}
+	if err := repo.SetAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
+		writeLogicError(r, err)
+		return
+	}
+	writeOK(r, map[string]interface{}{"ok": true})
+}
+
+func (cc *CRUDController) AssociationRemove(r *ghttp.Request) {
+	repo, ok := cc.repo(r)
+	if !ok {
+		return
+	}
+	body, err := parseJSONBody(r.GetBody())
+	if err != nil {
+		writeFail(r, http.StatusBadRequest, 1, "invalid json body", nil)
+		return
+	}
+	// DELETE body may be stripped; accept ?targetId= (not ?id=, which shadows path :id)
+	if body == nil {
+		if qid := r.GetQuery("targetId").String(); qid != "" {
+			body = map[string]interface{}{"id": parseID(qid)}
+		} else if qid := r.GetQuery("fk").String(); qid != "" {
+			body = map[string]interface{}{"id": parseID(qid)}
+		}
+	}
+	if err := repo.RemoveAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
+		writeLogicError(r, err)
+		return
+	}
+	writeOK(r, map[string]interface{}{"ok": true})
 }
 
 func splitAndTrim(s string) []string {

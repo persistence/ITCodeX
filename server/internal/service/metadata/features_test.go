@@ -139,6 +139,8 @@ func TestYaegi_BeforeCreateHook(t *testing.T) {
 	db.SetYaegi(ym)
 
 	coll := createBasicCollection(t, db, "yaegi_hook")
+	err := coll.AddField(ctx, CreateFieldInput{Name: "auto_field", Type: "string", DisplayName: "auto"})
+	a.NoError(err)
 	repo := coll.Repository()
 
 	const hookScript = `
@@ -146,16 +148,14 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"time"
 )
 
 func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
-	data["auto_field"] = fmt.Sprintf("auto_%d", time.Now().Unix())
+	data["auto_field"] = "from_hook"
 	return data, nil
 }
 `
-	err := ym.LoadScript(&modelmd.YaegiScript{
+	err = ym.LoadScript(&modelmd.YaegiScript{
 		CollectionName: "yaegi_hook",
 		Name:           "auto_field_hook",
 		HookPoint:      string(HookPointBeforeCreate),
@@ -169,6 +169,7 @@ func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]
 	})
 	a.NoError(err)
 	a.NotNil(record)
+	a.Equal("from_hook", record.Get("auto_field"))
 }
 
 func TestYaegi_CustomAPI(t *testing.T) {

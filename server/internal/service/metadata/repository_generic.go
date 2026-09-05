@@ -67,7 +67,14 @@ func (r *GenericRepository) applyFieldSelection(opts *CommonOptions) []Field {
 	allFields := r.coll.Fields()
 
 	if len(opts.Fields) == 0 && len(opts.Except) == 0 {
-		return allFields
+		var result []Field
+		for _, f := range allFields {
+			if isVirtualField(f) {
+				continue
+			}
+			result = append(result, f)
+		}
+		return result
 	}
 
 	exceptSet := make(map[string]bool)
@@ -94,6 +101,9 @@ func (r *GenericRepository) applyFieldSelection(opts *CommonOptions) []Field {
 		}
 		var result []Field
 		for _, f := range allFields {
+			if isVirtualField(f) {
+				continue
+			}
 			if fieldSet[f.Name()] && !exceptSet[f.Name()] {
 				result = append(result, f)
 			}
@@ -103,6 +113,9 @@ func (r *GenericRepository) applyFieldSelection(opts *CommonOptions) []Field {
 
 	var result []Field
 	for _, f := range allFields {
+		if isVirtualField(f) {
+			continue
+		}
 		if !exceptSet[f.Name()] {
 			result = append(result, f)
 		}
@@ -265,7 +278,7 @@ func (r *GenericRepository) convertValuesToStore(data map[string]interface{}) ([
 
 	for k, v := range data {
 		f := r.coll.GetField(k)
-		if f == nil {
+		if f == nil || isVirtualField(f) {
 			continue
 		}
 		storeVal, err := f.ToStoreValue(v)
@@ -277,6 +290,47 @@ func (r *GenericRepository) convertValuesToStore(data map[string]interface{}) ([
 	}
 
 	return columns, args, nil
+}
+
+func (r *GenericRepository) applyAutoFields(values map[string]interface{}) error {
+	for _, f := range r.coll.Fields() {
+		name := f.Name()
+		switch FieldType(f.Type()) {
+		case FieldTypeSequence:
+			if _, ok := values[name]; !ok || isEmptyValue(values[name]) {
+				opts := f.Options()
+				pattern, _ := opts["pattern"].(string)
+				startsAt := cast.ToInt(opts["startsAt"])
+				inc := cast.ToInt(opts["incrementBy"])
+				values[name] = nextSequenceValue(r.coll.Name(), name, pattern, startsAt, inc)
+			}
+		case FieldTypeUUID, FieldTypeNanoID:
+			if _, ok := values[name]; !ok || isEmptyValue(values[name]) {
+				sv, err := f.ToStoreValue(nil)
+				if err != nil {
+					return err
+				}
+				values[name] = sv
+			}
+		case FieldTypeFormula:
+			opts := f.Options()
+			expr, _ := opts["expression"].(string)
+			if expr == "" {
+				continue
+			}
+			val, err := EvaluateFormula(r.coll, expr, values)
+			if err != nil {
+				return err
+			}
+			values[name] = val
+		case FieldTypeSort:
+			if _, ok := values[name]; !ok || isEmptyValue(values[name]) {
+				// default to max+1 simplified: use timestamp seconds
+				values[name] = int(time.Now().Unix() % 100000000)
+			}
+		}
+	}
+	return nil
 }
 
 func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*Record, error) {
@@ -294,6 +348,16 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 
 	values = r.filterFieldsByWhitelist(values, opts.Whitelist, opts.Blacklist)
 	id, _ := r.applySystemFieldsForCreate(ctx, values)
+
+	cleaned, pending, err := r.processAssociationWrites(ctx, values, true)
+	if err != nil {
+		return nil, err
+	}
+	values = cleaned
+
+	if err := r.applyAutoFields(values); err != nil {
+		return nil, err
+	}
 
 	// Run validation
 	if v := r.coll.Db().Validator(); v != nil {
@@ -342,10 +406,18 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 	if err == nil && insertId > 0 {
 		id = insertId
 	}
+	if v, ok := values[DefaultPrimaryKey]; ok {
+		id = cast.ToInt64(v)
+	}
+
+	if err := r.applyPendingAssociations(ctx, id, pending); err != nil {
+		return nil, err
+	}
 
 	record, err := r.FindOne(ctx, &FindOneOptions{
 		CommonOptions: CommonOptions{
-			Filter: Filter{},
+			Filter:  Filter{},
+			Appends: opts.Appends,
 		},
 		FilterByTk: id,
 	})
@@ -409,7 +481,7 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 		filter[DefaultPrimaryKey] = opts.FilterByTk
 	}
 
-	whereClause, err := BuildWhereClause(filter, &params)
+	whereClause, err := BuildWhereClauseWithCollection(r.coll, filter, &params)
 	if err != nil {
 		return nil, err
 	}
@@ -460,8 +532,14 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 		return nil, err
 	}
 
+	if len(opts.Appends) > 0 {
+		if err := r.loadAppends(ctx, records, opts.Appends); err != nil {
+			return nil, err
+		}
+	}
+
 	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
-		_ = yaegi
+		_ = yaegi.ExecuteAfterFind(ctx, r.coll, records)
 	}
 
 	return records, nil
@@ -526,7 +604,7 @@ func (r *GenericRepository) Count(ctx context.Context, opts *CountOptions) (int,
 		filter = make(Filter)
 	}
 
-	whereClause, err := BuildWhereClause(filter, &params)
+	whereClause, err := BuildWhereClauseWithCollection(r.coll, filter, &params)
 	if err != nil {
 		return 0, err
 	}
@@ -572,6 +650,16 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 	delete(values, DefaultPrimaryKey)
 	delete(values, "created_at")
 
+	cleaned, pending, err := r.processAssociationWrites(ctx, values, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	values = cleaned
+
+	if err := r.applyAutoFields(values); err != nil {
+		return nil, 0, err
+	}
+
 	filter := opts.Filter
 	if filter == nil {
 		filter = make(Filter)
@@ -614,7 +702,7 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 
 	for k, v := range values {
 		f := r.coll.GetField(k)
-		if f == nil {
+		if f == nil || isVirtualField(f) {
 			continue
 		}
 		storeVal, err := f.ToStoreValue(v)
@@ -625,39 +713,50 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 		params = append(params, storeVal)
 	}
 
+	var affected int64
 	if len(setClauses) == 0 {
-		return nil, 0, fmt.Errorf("no fields to update")
+		if len(pending) == 0 {
+			return nil, 0, fmt.Errorf("no fields to update")
+		}
+	} else {
+		whereClause, werr := BuildWhereClauseWithCollection(r.coll, filter, &params)
+		if werr != nil {
+			return nil, 0, werr
+		}
+
+		query := fmt.Sprintf(`UPDATE %s SET %s WHERE %s`,
+			quoteIdent(r.coll.TableName()),
+			strings.Join(setClauses, ", "),
+			whereClause,
+		)
+
+		db := r.execDB()
+		result, execErr := db.Exec(ctx, query, params...)
+		if execErr != nil {
+			return nil, 0, NewSystemError(execErr)
+		}
+
+		affected, _ = result.RowsAffected()
 	}
 
-	whereClause, err := BuildWhereClause(filter, &params)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	query := fmt.Sprintf(`UPDATE %s SET %s WHERE %s`,
-		quoteIdent(r.coll.TableName()),
-		strings.Join(setClauses, ", "),
-		whereClause,
-	)
-
-	db := r.execDB()
-	result, err := db.Exec(ctx, query, params...)
-	if err != nil {
-		return nil, 0, NewSystemError(err)
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		affected = 0
+	if single {
+		if err := r.applyPendingAssociations(ctx, singleId, pending); err != nil {
+			return nil, 0, err
+		}
 	}
 
 	var updatedRecord *Record
 	if single {
-		updatedRecord, err = r.FindOne(ctx, &FindOneOptions{
-			FilterByTk: singleId,
+		var findErr error
+		updatedRecord, findErr = r.FindOne(ctx, &FindOneOptions{
+			CommonOptions: CommonOptions{Appends: opts.Appends},
+			FilterByTk:    singleId,
 		})
-		if err != nil {
-			return nil, int(affected), err
+		if findErr != nil {
+			return nil, int(affected), findErr
+		}
+		if affected == 0 {
+			affected = 1
 		}
 	}
 
@@ -716,7 +815,7 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 		}
 	}
 
-	whereClause, err := BuildWhereClause(filter, &params)
+	whereClause, err := BuildWhereClauseWithCollection(r.coll, filter, &params)
 	if err != nil {
 		return 0, err
 	}

@@ -1,5 +1,11 @@
 package metadata
 
+import (
+	"fmt"
+
+	"itcodex/server/pkg/utils"
+)
+
 type StringField struct {
 	BaseField
 }
@@ -74,8 +80,52 @@ type PasswordField struct {
 	BaseField
 }
 
+func (f *PasswordField) ToStoreValue(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+	s := castToString(value)
+	if s == "" {
+		return "", nil
+	}
+	// Already hashed (sha256 hex length 64)
+	if len(s) == 64 && isHexString(s) {
+		return s, nil
+	}
+	return utils.HashPassword(s), nil
+}
+
+func (f *PasswordField) FromStoreValue(value interface{}) (interface{}, error) {
+	return f.BaseField.FromStoreValue(value)
+}
+
 func NewPasswordField(coll *Collection, opts map[string]interface{}) (Field, error) {
-	return &PasswordField{
-		BaseField: newBaseField(string(FieldTypePassword), DataTypeVarchar, opts),
-	}, nil
+	bf := newBaseField(string(FieldTypePassword), DataTypeVarchar, opts)
+	if bf.length <= 0 {
+		bf.length = 128
+	}
+	return &PasswordField{BaseField: bf}, nil
+}
+
+func castToString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch t := v.(type) {
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }

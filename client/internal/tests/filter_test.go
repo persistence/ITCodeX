@@ -10,20 +10,21 @@ import (
 )
 
 func setupFilterTestCollection(t *testing.T, s *TestSuite) string {
-	collName := "test_filter_coll"
+	collName := uniqueName("test_filter")
 	s.createTestCollection(t, collName,
 		client.CreateFieldInput{Name: "name", Type: "string", IsRequired: true},
 		client.CreateFieldInput{Name: "age", Type: "integer"},
 		client.CreateFieldInput{Name: "score", Type: "integer"},
 		client.CreateFieldInput{Name: "status", Type: "string"},
+		client.CreateFieldInput{Name: "note", Type: "string"},
 	)
 
 	testData := []map[string]interface{}{
-		{"name": "Alice", "age": 25, "score": 85, "status": "active"},
-		{"name": "Bob", "age": 30, "score": 92, "status": "active"},
-		{"name": "Charlie", "age": 35, "score": 78, "status": "inactive"},
-		{"name": "David", "age": 28, "score": 95, "status": "active"},
-		{"name": "Eve", "age": 22, "score": 88, "status": "inactive"},
+		{"name": "Alice", "age": 25, "score": 85, "status": "active", "note": "has-li"},
+		{"name": "Bob", "age": 30, "score": 92, "status": "active", "note": "ok"},
+		{"name": "Charlie", "age": 35, "score": 78, "status": "inactive", "note": ""},
+		{"name": "David", "age": 28, "score": 95, "status": "active", "note": "x"},
+		{"name": "Eve", "age": 22, "score": 88, "status": "inactive", "note": "hello"},
 	}
 
 	for _, d := range testData {
@@ -231,4 +232,37 @@ func TestFilter_Count(t *testing.T) {
 	count, err := s.client.Count(s.ctx, collName, client.Filter{"status": "active"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), count)
+}
+
+func TestFilter_Empty(t *testing.T) {
+	s := setupTest(t)
+	collName := setupFilterTestCollection(t, s)
+
+	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
+		Filter: client.Filter{"note": map[string]interface{}{"$empty": true}},
+	})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(result.List), 1)
+}
+
+func TestFilter_NotEmpty(t *testing.T) {
+	s := setupTest(t)
+	collName := setupFilterTestCollection(t, s)
+
+	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
+		Filter: client.Filter{"name": map[string]interface{}{"$notEmpty": true}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 5, len(result.List))
+}
+
+func TestFilter_Includes(t *testing.T) {
+	s := setupTest(t)
+	collName := setupFilterTestCollection(t, s)
+
+	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
+		Filter: client.Filter{"note": map[string]interface{}{"$includes": "li"}},
+	})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(result.List), 1) // Alice note has-li
 }

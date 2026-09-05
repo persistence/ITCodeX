@@ -230,12 +230,16 @@ func (c *ControllerV1) ScriptSave(ctx context.Context, req *v1.ScriptSaveReq) (r
 
 	prefix := c.db.TablePrefix()
 	var result sql.Result
+	opts := script.Options
+	if opts == "" {
+		opts = "{}"
+	}
 	if script.Id > 0 {
 		query := fmt.Sprintf(`UPDATE %s SET collection_name=?, name=?, hook_point=?, content=?, api_path=?, http_method=?, enabled=?, priority=?, options=?, updated_at=? WHERE id=?`, md.QuoteIdent(prefix+"yaegi_scripts"))
-		result, err = c.db.SqlDB().ExecContext(ctx, query, script.CollectionName, script.Name, script.HookPoint, script.Content, script.APIPath, script.HTTPMethod, script.Enabled, script.Priority, script.Options, now, script.Id)
+		result, err = c.db.SqlDB().ExecContext(ctx, query, script.CollectionName, script.Name, script.HookPoint, script.Content, script.APIPath, script.HTTPMethod, script.Enabled, script.Priority, opts, now, script.Id)
 	} else {
 		query := fmt.Sprintf(`INSERT INTO %s (collection_name, name, hook_point, content, api_path, http_method, enabled, priority, options, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, md.QuoteIdent(prefix+"yaegi_scripts"))
-		result, err = c.db.SqlDB().ExecContext(ctx, query, script.CollectionName, script.Name, script.HookPoint, script.Content, script.APIPath, script.HTTPMethod, script.Enabled, script.Priority, script.Options, now, now)
+		result, err = c.db.SqlDB().ExecContext(ctx, query, script.CollectionName, script.Name, script.HookPoint, script.Content, script.APIPath, script.HTTPMethod, script.Enabled, script.Priority, opts, now, now)
 		if err == nil {
 			script.Id, _ = result.LastInsertId()
 		}
@@ -263,4 +267,65 @@ func (c *ControllerV1) ScriptDisable(ctx context.Context, req *v1.ScriptDisableR
 		}
 	}
 	return &v1.ScriptDisableRes{}, nil
+}
+
+func (c *ControllerV1) ScriptDelete(ctx context.Context, req *v1.ScriptDeleteReq) (res *v1.ScriptDeleteRes, err error) {
+	prefix := c.db.TablePrefix()
+	if yaegi := c.db.Yaegi(); yaegi != nil {
+		_ = yaegi.DisableScript(req.Id)
+	}
+	query := fmt.Sprintf(`DELETE FROM %s WHERE id=?`, md.QuoteIdent(prefix+"yaegi_scripts"))
+	if _, err = c.db.SqlDB().ExecContext(ctx, query, req.Id); err != nil {
+		return nil, wrapSvcErr(err)
+	}
+	return &v1.ScriptDeleteRes{}, nil
+}
+
+func (c *ControllerV1) ScriptValidate(_ context.Context, req *v1.ScriptValidateReq) (res *v1.ScriptValidateRes, err error) {
+	yaegi := c.db.Yaegi()
+	if yaegi == nil {
+		return &v1.ScriptValidateRes{Valid: false, Error: "yaegi not initialized"}, nil
+	}
+	if err := yaegi.ValidateScript(req.Content); err != nil {
+		return &v1.ScriptValidateRes{Valid: false, Error: err.Error()}, nil
+	}
+	return &v1.ScriptValidateRes{Valid: true}, nil
+}
+
+func (c *ControllerV1) IndexList(_ context.Context, req *v1.IndexListReq) (res *v1.IndexListRes, err error) {
+	coll, err := c.requireCollection(req.CollectionName)
+	if err != nil {
+		return nil, err
+	}
+	idxs := coll.Indexes()
+	list := make([]md.Index, 0, len(idxs))
+	for _, idx := range idxs {
+		if idx != nil {
+			list = append(list, *idx)
+		}
+	}
+	return &v1.IndexListRes{List: list}, nil
+}
+
+func (c *ControllerV1) IndexCreate(ctx context.Context, req *v1.IndexCreateReq) (res *v1.IndexCreateRes, err error) {
+	coll, err := c.requireCollection(req.CollectionName)
+	if err != nil {
+		return nil, err
+	}
+	idx := req.Index
+	if err = coll.AddIndex(ctx, &idx); err != nil {
+		return nil, wrapSvcErr(err)
+	}
+	return &v1.IndexCreateRes{Index: &idx}, nil
+}
+
+func (c *ControllerV1) IndexDelete(ctx context.Context, req *v1.IndexDeleteReq) (res *v1.IndexDeleteRes, err error) {
+	coll, err := c.requireCollection(req.CollectionName)
+	if err != nil {
+		return nil, err
+	}
+	if err = coll.RemoveIndex(ctx, req.Fields); err != nil {
+		return nil, wrapSvcErr(err)
+	}
+	return &v1.IndexDeleteRes{}, nil
 }

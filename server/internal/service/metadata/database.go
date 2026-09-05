@@ -67,6 +67,7 @@ type YaegiManager interface {
 	ExecuteAfterDelete(ctx context.Context, coll *Collection, affected int) error
 	ExecuteCustomAPI(script *modelmd.YaegiScript, ctx *yaegictx.YaegiHTTPContext) error
 	ValidateScript(content string) error
+	ExecuteAfterFind(ctx context.Context, coll *Collection, records []*Record) error
 }
 
 type Database struct {
@@ -137,6 +138,14 @@ func (d *Database) Bootstrap(ctx context.Context) error {
 	}
 	if err := d.loadFields(ctx); err != nil {
 		return err
+	}
+	if err := d.loadIndexes(ctx); err != nil {
+		return err
+	}
+	if d.yaegi != nil {
+		if err := d.loadEnabledScripts(ctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -332,6 +341,109 @@ func (d *Database) loadFields(ctx context.Context) error {
 	return nil
 }
 
+func (d *Database) loadIndexes(ctx context.Context) error {
+	prefix := d.TablePrefix()
+	query := fmt.Sprintf(
+		`SELECT id, collection_name, name, fields, %s FROM %s`,
+		quoteIdent("unique"),
+		quoteIdent(prefix+"indexes"),
+	)
+	rows, err := d.db.Query(ctx, query)
+	if err != nil {
+		return NewSystemError(err)
+	}
+	defer rows.Close()
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for rows.Next() {
+		var (
+			id             int64
+			collectionName string
+			name           string
+			fieldsJson     string
+			unique         bool
+		)
+		if err := rows.Scan(&id, &collectionName, &name, &fieldsJson, &unique); err != nil {
+			return NewSystemError(err)
+		}
+		coll, ok := d.collections[collectionName]
+		if !ok {
+			continue
+		}
+		var fields []string
+		if err := json.Unmarshal([]byte(fieldsJson), &fields); err != nil {
+			continue
+		}
+		coll.indexes = append(coll.indexes, &Index{
+			ID:     id,
+			Name:   name,
+			Fields: fields,
+			Unique: unique,
+		})
+	}
+	return nil
+}
+
+func (d *Database) loadEnabledScripts(ctx context.Context) error {
+	if d.yaegi == nil {
+		return nil
+	}
+	prefix := d.TablePrefix()
+	query := fmt.Sprintf(
+		`SELECT id, collection_name, name, hook_point, content, api_path, http_method, enabled, priority, options FROM %s WHERE enabled = 1 ORDER BY priority ASC, id ASC`,
+		quoteIdent(prefix+"yaegi_scripts"),
+	)
+	rows, err := d.db.Query(ctx, query)
+	if err != nil {
+		return NewSystemError(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id             int64
+			collectionName sql.NullString
+			name           string
+			hookPoint      string
+			content        string
+			apiPath        sql.NullString
+			httpMethod     sql.NullString
+			enabled        bool
+			priority       int
+			options        sql.NullString
+		)
+		if err := rows.Scan(&id, &collectionName, &name, &hookPoint, &content, &apiPath, &httpMethod, &enabled, &priority, &options); err != nil {
+			return NewSystemError(err)
+		}
+		script := &modelmd.YaegiScript{
+			Id:        id,
+			Name:      name,
+			HookPoint: hookPoint,
+			Content:   content,
+			Enabled:   enabled,
+			Priority:  priority,
+		}
+		if collectionName.Valid {
+			script.CollectionName = collectionName.String
+		}
+		if apiPath.Valid {
+			script.APIPath = apiPath.String
+		}
+		if httpMethod.Valid {
+			script.HTTPMethod = httpMethod.String
+		}
+		if options.Valid {
+			script.Options = options.String
+		}
+		if err := d.yaegi.LoadScript(script); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func isSystemFieldName(name string) bool {
 	switch name {
 	case "id", "created_at", "updated_at", "created_by", "updated_by":
@@ -391,6 +503,77 @@ func applyCollectionInputMeta(coll *Collection, input CreateCollectionInput) {
 	if input.Options.SimplePagination {
 		coll.opts["simplePagination"] = true
 	}
+	if input.Options.TreeParentKey != "" {
+		coll.opts["treeParentKey"] = input.Options.TreeParentKey
+	}
+	if input.Options.CalendarStartField != "" {
+		coll.opts["calendarStartField"] = input.Options.CalendarStartField
+	}
+	if input.Options.CalendarEndField != "" {
+		coll.opts["calendarEndField"] = input.Options.CalendarEndField
+	}
+	if input.Options.CommentForeignKey != "" {
+		coll.opts["commentForeignKey"] = input.Options.CommentForeignKey
+	}
+}
+
+// applySpecialCollectionDefaults sets type-specific options and injects default fields
+// for tree / calendar / comment / file collections.
+func applySpecialCollectionDefaults(coll *Collection, typ CollectionType) {
+	if coll.opts == nil {
+		coll.opts = make(map[string]interface{})
+	}
+	switch typ {
+	case CollectionTypeTree:
+		parentKey := "parent_id"
+		if v, ok := coll.opts["treeParentKey"].(string); ok && v != "" {
+			parentKey = v
+		}
+		coll.opts["treeParentKey"] = parentKey
+		injectDefaultField(coll, parentKey, "父级", "bigint")
+	case CollectionTypeCalendar:
+		startField := "start"
+		endField := "end"
+		if v, ok := coll.opts["calendarStartField"].(string); ok && v != "" {
+			startField = v
+		}
+		if v, ok := coll.opts["calendarEndField"].(string); ok && v != "" {
+			endField = v
+		}
+		coll.opts["calendarStartField"] = startField
+		coll.opts["calendarEndField"] = endField
+		injectDefaultField(coll, startField, "开始时间", FieldTypeDateTime)
+		injectDefaultField(coll, endField, "结束时间", FieldTypeDateTime)
+	case CollectionTypeComment:
+		fk := "target_id"
+		if v, ok := coll.opts["commentForeignKey"].(string); ok && v != "" {
+			fk = v
+		}
+		coll.opts["commentForeignKey"] = fk
+		injectDefaultField(coll, fk, "关联目标", "bigint")
+	case CollectionTypeFile:
+		injectDefaultField(coll, "name", "文件名", FieldTypeString)
+		injectDefaultField(coll, "url", "URL", FieldTypeUrl)
+		injectDefaultField(coll, "mime", "MIME", FieldTypeString)
+		injectDefaultField(coll, "size", "大小", FieldTypeInteger)
+	}
+}
+
+func injectDefaultField(coll *Collection, name, displayName string, typ FieldType) {
+	if _, exists := coll.fields[name]; exists {
+		return
+	}
+	opts := map[string]interface{}{
+		"name":        name,
+		"displayName": displayName,
+		"required":    false,
+		"isSystem":    true,
+	}
+	f, err := NewField(coll, typ, opts)
+	if err != nil {
+		return
+	}
+	coll.addFieldInternal(f)
 }
 
 func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionInput) (*Collection, error) {
@@ -401,8 +584,10 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 	if input.Type == "" {
 		input.Type = CollectionTypeGeneral
 	}
-	if input.Type != CollectionTypeGeneral {
-		return nil, fmt.Errorf("一期仅支持普通表 general，类型 %s 将在后续阶段实现", input.Type)
+	switch input.Type {
+	case CollectionTypeGeneral, CollectionTypeTree, CollectionTypeCalendar, CollectionTypeComment, CollectionTypeFile:
+	default:
+		return nil, fmt.Errorf("不支持的集合类型: %s", input.Type)
 	}
 
 	if d.HasCollection(input.Name) {
@@ -440,6 +625,8 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 		}
 	}
 
+	applySpecialCollectionDefaults(coll, input.Type)
+
 	for _, fi := range input.Fields {
 		opts := make(map[string]interface{})
 		opts["name"] = fi.Name
@@ -455,16 +642,31 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 			}
 		}
 		attachFieldInputOptions(opts, fi)
+		attachRelationInput(opts, fi)
 		f, err := NewField(coll, fi.Type, opts)
 		if err != nil {
 			return nil, err
 		}
 		coll.addFieldInternal(f)
+		if FieldType(f.Type()) == FieldTypeBelongsToMany {
+			ro := GetRelationOptions(f)
+			if err := ensureThroughTableDDL(ctx, d, ro.Through, ro.ForeignKey, ro.OtherKey); err != nil {
+				return nil, NewSystemError(err)
+			}
+		}
 	}
 
+	pendingIndexes := make([]*Index, 0, len(input.Indexes))
 	for _, idx := range input.Indexes {
 		idxCopy := idx
-		coll.indexes = append(coll.indexes, &idxCopy)
+		if idxCopy.Name == "" {
+			idxCopy.Name = fmt.Sprintf("idx_%s_%s", coll.name, strings.Join(idxCopy.Fields, "_"))
+		}
+		pendingIndexes = append(pendingIndexes, &idxCopy)
+		// Unique indexes participate in generateDDL UNIQUE constraints.
+		if idxCopy.Unique {
+			coll.indexes = append(coll.indexes, &idxCopy)
+		}
 	}
 
 	if input.TableValidation != nil {
@@ -495,6 +697,21 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 	}
 
 	coll.isNew = false
+
+	// Reset indexes then create/persist all so memory matches c_indexes.
+	coll.indexes = coll.indexes[:0]
+	for _, idx := range pendingIndexes {
+		if idx.Unique {
+			coll.indexes = append(coll.indexes, idx)
+			if err := coll.persistIndex(ctx, idx); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if err := coll.AddIndex(ctx, idx); err != nil {
+			return nil, err
+		}
+	}
 
 	d.mu.Lock()
 	d.collections[coll.name] = coll
@@ -530,6 +747,10 @@ func (d *Database) DropCollection(ctx context.Context, name string) error {
 
 	prefix := d.TablePrefix()
 	_, err := d.db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ?`, quoteIdent(prefix+"fields")), name)
+	if err != nil {
+		return NewSystemError(err)
+	}
+	_, err = d.db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ?`, quoteIdent(prefix+"indexes")), name)
 	if err != nil {
 		return NewSystemError(err)
 	}

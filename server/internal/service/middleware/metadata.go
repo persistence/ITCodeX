@@ -62,6 +62,14 @@ func CustomAPIRouter(db *md.Database) func(r *ghttp.Request) {
 		}
 
 		params := make(map[string]string)
+		// Simple path param: last non-empty segment as id when path has trailing id-like segment
+		segs := strings.Split(strings.Trim(apiPath, "/"), "/")
+		if len(segs) > 0 {
+			last := segs[len(segs)-1]
+			if last != "" && last != "action" {
+				params["id"] = last
+			}
+		}
 
 		yctx := yaegictx.NewYaegiHTTPContext(r.Response.Writer, r.Request, params)
 

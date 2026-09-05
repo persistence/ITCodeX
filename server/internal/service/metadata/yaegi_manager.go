@@ -13,6 +13,7 @@ import (
 
 	modelmd "itcodex/server/internal/model/metadata"
 	yaegictx "itcodex/server/pkg/yaegi/context"
+	yaegiutils "itcodex/server/pkg/yaegi/utils"
 )
 
 type YaegiInstance struct {
@@ -115,6 +116,12 @@ func (m *DefaultYaegiManager) ValidateScript(content string) error {
 		return err
 	}
 	if err := i.Use(yaegictx.Symbols); err != nil {
+		return err
+	}
+	if err := i.Use(m.buildExports()); err != nil {
+		return err
+	}
+	if err := i.Use(yaegiutils.Symbols); err != nil {
 		return err
 	}
 	_, err := i.Eval(content)
@@ -367,6 +374,12 @@ func (m *DefaultYaegiManager) compileScript(script *modelmd.YaegiScript) (*Yaegi
 	if err := i.Use(yaegictx.Symbols); err != nil {
 		return nil, err
 	}
+	if err := i.Use(m.buildExports()); err != nil {
+		return nil, err
+	}
+	if err := i.Use(yaegiutils.Symbols); err != nil {
+		return nil, err
+	}
 
 	if _, err := i.Eval(script.Content); err != nil {
 		return nil, fmt.Errorf("script compile error: %w", err)
@@ -385,12 +398,17 @@ func (m *DefaultYaegiManager) compileScript(script *modelmd.YaegiScript) (*Yaegi
 		HookPointAfterUpdate,
 		HookPointBeforeDelete,
 		HookPointAfterDelete,
+		HookPointBeforeFind,
+		HookPointAfterFind,
 	}
 
 	for _, hp := range hookPoints {
-		v, err := i.Eval(string(hp))
-		if err == nil && v.IsValid() {
-			inst.hooks[hp] = v
+		for _, name := range hookSymbolNames(hp) {
+			v, err := i.Eval(name)
+			if err == nil && v.IsValid() {
+				inst.hooks[hp] = v
+				break
+			}
 		}
 	}
 
@@ -401,4 +419,42 @@ func (m *DefaultYaegiManager) compileScript(script *modelmd.YaegiScript) (*Yaegi
 	}
 
 	return inst, nil
+}
+
+func hookSymbolNames(hp HookPoint) []string {
+	s := string(hp)
+	if s == "" {
+		return nil
+	}
+	// Scripts conventionally export PascalCase (BeforeCreate); hook point is camelCase (beforeCreate).
+	pascal := strings.ToUpper(s[:1]) + s[1:]
+	return []string{s, pascal}
+}
+
+func (m *DefaultYaegiManager) ExecuteAfterFind(ctx context.Context, coll *Collection, records []*Record) (err error) {
+	hooks := m.getHooks(coll.Name(), HookPointAfterFind)
+	for _, inst := range hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("script panic: %v", r)
+				}
+			}()
+			if err != nil {
+				return
+			}
+			fn, ok := inst.hooks[HookPointAfterFind]
+			if !ok || !fn.IsValid() {
+				return
+			}
+			args := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(records)}
+			returns := fn.Call(args)
+			if len(returns) > 0 {
+				if hookErr, ok := returns[0].Interface().(error); ok && hookErr != nil {
+					err = hookErr
+				}
+			}
+		}()
+	}
+	return err
 }

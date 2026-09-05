@@ -84,15 +84,17 @@ func TestCollection_Drop(t *testing.T) {
 	a.False(db.HasCollection("todrop"))
 }
 
-func TestCreateCollection_RejectNonGeneral(t *testing.T) {
+func TestCreateCollection_SpecialTypes(t *testing.T) {
 	a := assert.New(t)
 	db := newTestDB(t)
-	_, err := db.CreateCollection(context.Background(), CreateCollectionInput{
+	coll, err := db.CreateCollection(context.Background(), CreateCollectionInput{
 		Name: "tree_like",
 		Type: CollectionTypeTree,
 	})
-	a.Error(err)
-	a.Contains(err.Error(), "general")
+	a.NoError(err)
+	a.Equal(CollectionTypeTree, coll.Type())
+	a.True(coll.HasField("parent_id"))
+	a.Equal("parent_id", coll.Options()["treeParentKey"])
 }
 
 func TestUpdateCollection_PersistsMeta(t *testing.T) {

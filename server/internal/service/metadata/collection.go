@@ -147,13 +147,15 @@ func (c *Collection) AddField(ctx context.Context, input CreateFieldInput) error
 		}
 	}
 	attachFieldInputOptions(opts, input)
+	attachRelationInput(opts, input)
 
 	f, err := NewField(c, input.Type, opts)
 	if err != nil {
 		return err
 	}
 
-	if c.db != nil && !c.isNew {
+	virtual := isVirtualField(f)
+	if c.db != nil && !c.isNew && !virtual && f.DDLColumn() != "" {
 		ddl := c.alterAddColumnDDL(f)
 		if _, err := c.db.db.Exec(ctx, ddl); err != nil {
 			return NewSystemError(err)
@@ -169,6 +171,22 @@ func (c *Collection) AddField(ctx context.Context, input CreateFieldInput) error
 		_, err := c.db.db.Exec(ctx, query, c.name, input.Name, string(input.Type), input.DisplayName, input.IsRequired, input.IsUnique, input.IsIndexed, string(optionsJson), input.Sort)
 		if err != nil {
 			return NewSystemError(err)
+		}
+	}
+
+	if FieldType(f.Type()) == FieldTypeBelongsToMany {
+		ro := GetRelationOptions(f)
+		if err := ensureThroughTableDDL(ctx, c.db, ro.Through, ro.ForeignKey, ro.OtherKey); err != nil {
+			return NewSystemError(err)
+		}
+	}
+
+	if !virtual && (input.IsIndexed || input.IsUnique) {
+		if err := c.addIndexLocked(ctx, &Index{
+			Fields: []string{input.Name},
+			Unique: input.IsUnique,
+		}); err != nil {
+			return err
 		}
 	}
 
@@ -214,10 +232,23 @@ func (c *Collection) RemoveField(ctx context.Context, name string) error {
 	return nil
 }
 
+func (c *Collection) Indexes() []*Index {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]*Index, len(c.indexes))
+	copy(out, c.indexes)
+	return out
+}
+
 func (c *Collection) AddIndex(ctx context.Context, index *Index) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.addIndexLocked(ctx, index)
+}
 
+// addIndexLocked creates the index DDL, appends to memory, and persists metadata.
+// Caller must hold c.mu.
+func (c *Collection) addIndexLocked(ctx context.Context, index *Index) error {
 	if index.Name == "" {
 		index.Name = fmt.Sprintf("idx_%s_%s", c.name, strings.Join(index.Fields, "_"))
 	}
@@ -244,9 +275,29 @@ func (c *Collection) AddIndex(ctx context.Context, index *Index) error {
 		if _, err := c.db.db.Exec(ctx, b.String()); err != nil {
 			return NewSystemError(err)
 		}
+		if err := c.persistIndex(ctx, index); err != nil {
+			return err
+		}
 	}
 
 	c.indexes = append(c.indexes, index)
+	return nil
+}
+
+func (c *Collection) persistIndex(ctx context.Context, index *Index) error {
+	if c.db == nil || c.isNew {
+		return nil
+	}
+	fieldsJson, _ := json.Marshal(index.Fields)
+	query := fmt.Sprintf(
+		`INSERT INTO %s (collection_name, name, fields, %s) VALUES (?, ?, ?, ?)`,
+		quoteIdent(c.db.TablePrefix()+"indexes"),
+		quoteIdent("unique"),
+	)
+	_, err := c.db.db.Exec(ctx, query, c.name, index.Name, string(fieldsJson), index.Unique)
+	if err != nil {
+		return NewSystemError(err)
+	}
 	return nil
 }
 
@@ -259,6 +310,10 @@ func (c *Collection) RemoveIndex(ctx context.Context, fields []string) error {
 			if c.db != nil && !c.isNew {
 				_, err := c.db.db.Exec(ctx, fmt.Sprintf(`DROP INDEX %s ON %s`, quoteIdent(idx.Name), quoteIdent(c.tableName)))
 				if err != nil {
+					return NewSystemError(err)
+				}
+				del := fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ? AND name = ?`, quoteIdent(c.db.TablePrefix()+"indexes"))
+				if _, err := c.db.db.Exec(ctx, del, c.name, idx.Name); err != nil {
 					return NewSystemError(err)
 				}
 			}
@@ -277,6 +332,9 @@ func (c *Collection) generateDDL() string {
 
 	first := true
 	for _, f := range c.Fields() {
+		if isVirtualField(f) || f.DDLColumn() == "" {
+			continue
+		}
 		if !first {
 			b.WriteString(", ")
 		}
@@ -396,7 +454,42 @@ func (c *Collection) Sync(ctx context.Context) error {
 	if _, err := c.db.db.Exec(ctx, c.generateDDL()); err != nil {
 		return NewSystemError(err)
 	}
+
+	existing, err := c.existingColumnNames(ctx)
+	if err != nil {
+		return err
+	}
+	for _, f := range c.Fields() {
+		if isVirtualField(f) || f.DDLColumn() == "" {
+			continue
+		}
+		if existing[f.Name()] {
+			continue
+		}
+		if _, err := c.db.db.Exec(ctx, c.alterAddColumnDDL(f)); err != nil {
+			return NewSystemError(err)
+		}
+	}
 	return nil
+}
+
+func (c *Collection) existingColumnNames(ctx context.Context) (map[string]bool, error) {
+	query := `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`
+	rows, err := c.db.db.Query(ctx, query, c.tableName)
+	if err != nil {
+		return nil, NewSystemError(err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, NewSystemError(err)
+		}
+		out[name] = true
+	}
+	return out, nil
 }
 
 func (c *Collection) alterAddColumnDDL(f Field) string {
@@ -467,6 +560,19 @@ func (r *unimplementedRepository) Transaction(ctx context.Context, fn func(tx Re
 
 func (r *unimplementedRepository) Collection() *Collection {
 	return r.coll
+}
+
+func (r *unimplementedRepository) ListAssociation(ctx context.Context, sourceID interface{}, association string) ([]map[string]interface{}, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *unimplementedRepository) AddAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *unimplementedRepository) SetAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *unimplementedRepository) RemoveAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+	return fmt.Errorf("not implemented")
 }
 
 func newCollection(db *Database, name string, opts ...CollectionOption) *Collection {

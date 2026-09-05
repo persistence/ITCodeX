@@ -19,23 +19,21 @@ func (c *Client) List(ctx context.Context, collection string, opts *FindOptions)
 			}
 			params["filter"] = string(filterBytes)
 		}
-
 		if len(opts.Sort) > 0 {
 			params["sort"] = joinStrings(opts.Sort, ",")
 		}
-
 		if len(opts.Fields) > 0 {
 			params["fields"] = joinStrings(opts.Fields, ",")
 		}
-
 		if len(opts.Except) > 0 {
 			params["except"] = joinStrings(opts.Except, ",")
 		}
-
+		if len(opts.Appends) > 0 {
+			params["appends"] = joinStrings(opts.Appends, ",")
+		}
 		if opts.Page > 0 {
 			params["page"] = strconv.Itoa(opts.Page)
 		}
-
 		if opts.PageSize > 0 {
 			params["pageSize"] = strconv.Itoa(opts.PageSize)
 		}
@@ -45,21 +43,21 @@ func (c *Client) List(ctx context.Context, collection string, opts *FindOptions)
 	if err != nil {
 		return nil, err
 	}
-
 	m, _ := resp.(map[string]interface{})
 	return parseListResult(m["data"])
 }
 
 func (c *Client) FindOne(ctx context.Context, collection, id string, opts *FindOneOptions) (map[string]interface{}, error) {
 	params := make(map[string]string)
-
 	if opts != nil {
 		if len(opts.Fields) > 0 {
 			params["fields"] = joinStrings(opts.Fields, ",")
 		}
-
 		if len(opts.Except) > 0 {
 			params["except"] = joinStrings(opts.Except, ",")
+		}
+		if len(opts.Appends) > 0 {
+			params["appends"] = joinStrings(opts.Appends, ",")
 		}
 	}
 
@@ -67,7 +65,6 @@ func (c *Client) FindOne(ctx context.Context, collection, id string, opts *FindO
 	if err != nil {
 		return nil, err
 	}
-
 	m, _ := resp.(map[string]interface{})
 	record, ok := m["data"].(map[string]interface{})
 	if !ok {
@@ -81,13 +78,42 @@ func (c *Client) Create(ctx context.Context, collection string, data map[string]
 	if err != nil {
 		return nil, err
 	}
-
 	m, _ := resp.(map[string]interface{})
 	record, ok := m["data"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
 	}
 	return record, nil
+}
+
+func (c *Client) CreateMany(ctx context.Context, collection string, records []map[string]interface{}) ([]map[string]interface{}, error) {
+	resp, err := c.post(ctx, fmt.Sprintf("/api/c/%s/batch", url.PathEscape(collection)), records)
+	if err != nil {
+		return nil, err
+	}
+	m, _ := resp.(map[string]interface{})
+	data := m["data"]
+	switch v := data.(type) {
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if rec, ok := item.(map[string]interface{}); ok {
+				out = append(out, rec)
+			}
+		}
+		return out, nil
+	case map[string]interface{}:
+		if list, ok := v["list"].([]interface{}); ok {
+			out := make([]map[string]interface{}, 0, len(list))
+			for _, item := range list {
+				if rec, ok := item.(map[string]interface{}); ok {
+					out = append(out, rec)
+				}
+			}
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("unexpected batch response: %T", data)
 }
 
 func (c *Client) Update(ctx context.Context, collection, id string, data map[string]interface{}) (map[string]interface{}, error) {
@@ -95,13 +121,14 @@ func (c *Client) Update(ctx context.Context, collection, id string, data map[str
 	if err != nil {
 		return nil, err
 	}
-
 	m, _ := resp.(map[string]interface{})
-	record, ok := m["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
+	switch v := m["data"].(type) {
+	case map[string]interface{}:
+		return v, nil
+	default:
+		// some update handlers return {affected:n}
+		return map[string]interface{}{"affected": asInt64(v)}, nil
 	}
-	return record, nil
 }
 
 func (c *Client) DeleteOne(ctx context.Context, collection, id string) (int64, error) {
@@ -109,14 +136,11 @@ func (c *Client) DeleteOne(ctx context.Context, collection, id string) (int64, e
 	if err != nil {
 		return 0, err
 	}
-
-	m, _ := resp.(map[string]interface{})
-	return asInt64(m["affected"]), nil
+	return extractAffected(resp), nil
 }
 
 func (c *Client) BulkDelete(ctx context.Context, collection string, filter Filter) (int64, error) {
 	params := make(map[string]string)
-
 	if filter != nil {
 		filterBytes, err := json.Marshal(filter)
 		if err != nil {
@@ -124,27 +148,43 @@ func (c *Client) BulkDelete(ctx context.Context, collection string, filter Filte
 		}
 		params["filter"] = string(filterBytes)
 	}
-
 	resp, err := c.del(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), params)
 	if err != nil {
 		return 0, err
 	}
-
-	m, _ := resp.(map[string]interface{})
-	return asInt64(m["affected"]), nil
+	return extractAffected(resp), nil
 }
 
 func (c *Client) Count(ctx context.Context, collection string, filter Filter) (int64, error) {
-	result, err := c.List(ctx, collection, &FindOptions{
-		Filter:   filter,
-		Page:     1,
-		PageSize: 1,
-	})
+	params := make(map[string]string)
+	if filter != nil {
+		b, err := json.Marshal(filter)
+		if err != nil {
+			return 0, err
+		}
+		params["filter"] = string(b)
+	}
+	resp, err := c.get(ctx, fmt.Sprintf("/api/c/%s/count", url.PathEscape(collection)), params)
 	if err != nil {
 		return 0, err
 	}
+	m, _ := resp.(map[string]interface{})
+	data, _ := m["data"].(map[string]interface{})
+	if data == nil {
+		return 0, fmt.Errorf("unexpected count response")
+	}
+	return asInt64(data["count"]), nil
+}
 
-	return result.Total, nil
+func extractAffected(resp interface{}) int64 {
+	m, _ := resp.(map[string]interface{})
+	if m == nil {
+		return 0
+	}
+	if data, ok := m["data"].(map[string]interface{}); ok {
+		return asInt64(data["affected"])
+	}
+	return asInt64(m["affected"])
 }
 
 func joinStrings(items []string, sep string) string {

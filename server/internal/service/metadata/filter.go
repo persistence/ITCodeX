@@ -6,6 +6,10 @@ import (
 )
 
 func BuildWhereClause(filter Filter, params *[]interface{}) (string, error) {
+	return BuildWhereClauseWithCollection(nil, filter, params)
+}
+
+func BuildWhereClauseWithCollection(coll *Collection, filter Filter, params *[]interface{}) (string, error) {
 	if len(filter) == 0 {
 		return "1=1", nil
 	}
@@ -14,13 +18,13 @@ func BuildWhereClause(filter Filter, params *[]interface{}) (string, error) {
 
 	for key, value := range filter {
 		if strings.HasPrefix(key, "$") {
-			cond, err := buildLogicalCondition(key, value, params)
+			cond, err := buildLogicalCondition(coll, key, value, params)
 			if err != nil {
 				return "", err
 			}
 			conditions = append(conditions, cond)
 		} else {
-			cond, err := buildFieldCondition(key, value, params)
+			cond, err := buildFieldCondition(columnName(key), value, params, coll)
 			if err != nil {
 				return "", err
 			}
@@ -37,20 +41,22 @@ func BuildWhereClause(filter Filter, params *[]interface{}) (string, error) {
 	return "(" + strings.Join(conditions, " AND ") + ")", nil
 }
 
-func buildLogicalCondition(op string, value interface{}, params *[]interface{}) (string, error) {
+func columnName(key string) string { return key }
+
+func buildLogicalCondition(coll *Collection, op string, value interface{}, params *[]interface{}) (string, error) {
 	switch op {
 	case "$and":
-		return buildAndOrCondition("AND", value, params)
+		return buildAndOrCondition(coll, "AND", value, params)
 	case "$or":
-		return buildAndOrCondition("OR", value, params)
+		return buildAndOrCondition(coll, "OR", value, params)
 	case "$not":
-		return buildNotCondition(value, params)
+		return buildNotCondition(coll, value, params)
 	default:
 		return "", fmt.Errorf("unknown logical operator: %s", op)
 	}
 }
 
-func buildAndOrCondition(logicOp string, value interface{}, params *[]interface{}) (string, error) {
+func buildAndOrCondition(coll *Collection, logicOp string, value interface{}, params *[]interface{}) (string, error) {
 	filters, err := toFilterSlice(value)
 	if err != nil {
 		return "", err
@@ -60,7 +66,7 @@ func buildAndOrCondition(logicOp string, value interface{}, params *[]interface{
 	}
 	parts := make([]string, 0, len(filters))
 	for _, f := range filters {
-		cond, err := BuildWhereClause(f, params)
+		cond, err := BuildWhereClauseWithCollection(coll, f, params)
 		if err != nil {
 			return "", err
 		}
@@ -72,7 +78,7 @@ func buildAndOrCondition(logicOp string, value interface{}, params *[]interface{
 	return "(" + strings.Join(parts, " "+logicOp+" ") + ")", nil
 }
 
-func buildNotCondition(value interface{}, params *[]interface{}) (string, error) {
+func buildNotCondition(coll *Collection, value interface{}, params *[]interface{}) (string, error) {
 	filter, ok := value.(Filter)
 	if !ok {
 		m, ok := value.(map[string]interface{})
@@ -81,14 +87,24 @@ func buildNotCondition(value interface{}, params *[]interface{}) (string, error)
 		}
 		filter = Filter(m)
 	}
-	cond, err := BuildWhereClause(filter, params)
+	cond, err := BuildWhereClauseWithCollection(coll, filter, params)
 	if err != nil {
 		return "", err
 	}
 	return "NOT (" + cond + ")", nil
 }
 
-func buildFieldCondition(columnName string, value interface{}, params *[]interface{}) (string, error) {
+func buildFieldCondition(columnName string, value interface{}, params *[]interface{}, coll *Collection) (string, error) {
+	// Association filter: posts.title -> EXISTS subquery (one level)
+	if coll != nil && strings.Contains(columnName, ".") {
+		parts := strings.SplitN(columnName, ".", 2)
+		assocName, targetCol := parts[0], parts[1]
+		f := coll.GetField(assocName)
+		if f != nil && isRelationField(f) {
+			return buildAssociationFilter(coll, f, targetCol, value, params)
+		}
+	}
+
 	switch v := value.(type) {
 	case Filter:
 		return buildOperatorCondition(columnName, v, params)
@@ -97,6 +113,49 @@ func buildFieldCondition(columnName string, value interface{}, params *[]interfa
 	default:
 		opFn, _ := GetOperator("$eq")
 		return opFn(columnName, value, params)
+	}
+}
+
+func buildAssociationFilter(coll *Collection, f Field, targetCol string, value interface{}, params *[]interface{}) (string, error) {
+	ro := GetRelationOptions(f)
+	target := coll.Db().Collection(ro.Target)
+	if target == nil {
+		return "1=0", nil
+	}
+	var inner string
+	var err error
+	switch v := value.(type) {
+	case Filter:
+		inner, err = buildOperatorCondition(targetCol, v, params)
+	case map[string]interface{}:
+		inner, err = buildOperatorCondition(targetCol, Filter(v), params)
+	default:
+		opFn, _ := GetOperator("$eq")
+		inner, err = opFn(targetCol, value, params)
+	}
+	if err != nil {
+		return "", err
+	}
+	srcTable := quoteIdent(coll.TableName())
+	tgtTable := quoteIdent(target.TableName())
+	switch FieldType(f.Type()) {
+	case FieldTypeBelongsTo:
+		fk := ro.ForeignKey
+		if fk == "" {
+			fk = f.Name()
+		}
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE %s.%s = %s.%s AND %s)",
+			tgtTable, tgtTable, quoteIdent(ro.TargetKey), srcTable, quoteIdent(fk), inner), nil
+	case FieldTypeHasMany, FieldTypeHasOne:
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE %s.%s = %s.%s AND %s)",
+			tgtTable, tgtTable, quoteIdent(ro.ForeignKey), srcTable, quoteIdent(ro.SourceKey), inner), nil
+	case FieldTypeBelongsToMany:
+		through := quoteIdent(ro.Through)
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM %s JOIN %s ON %s.%s = %s.%s WHERE %s.%s = %s.%s AND %s)",
+			through, tgtTable, through, quoteIdent(ro.OtherKey), tgtTable, quoteIdent(ro.TargetKey),
+			through, quoteIdent(ro.ForeignKey), srcTable, quoteIdent(ro.SourceKey), inner), nil
+	default:
+		return "1=1", nil
 	}
 }
 
@@ -111,7 +170,7 @@ func buildOperatorCondition(columnName string, opMap Filter, params *[]interface
 			return "", fmt.Errorf("operator must start with $: %s", opName)
 		}
 		if opName == "$and" || opName == "$or" || opName == "$not" {
-			cond, err := buildLogicalCondition(opName, opValue, params)
+			cond, err := buildLogicalCondition(nil, opName, opValue, params)
 			if err != nil {
 				return "", err
 			}

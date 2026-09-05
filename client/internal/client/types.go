@@ -7,16 +7,26 @@ type Collection struct {
 	DisplayName string                 `json:"displayName"`
 	Type        string                 `json:"type"`
 	Description string                 `json:"description,omitempty"`
+	FieldCount  int                    `json:"fieldCount,omitempty"`
 	Options     map[string]interface{} `json:"options,omitempty"`
+	Fields      []Field                `json:"fields,omitempty"`
 }
 
 type CreateCollectionInput struct {
-	Name        string                 `json:"name"`
-	DisplayName string                 `json:"displayName"`
-	Type        string                 `json:"type"`
+	Name         string                 `json:"name"`
+	DisplayName  string                 `json:"displayName"`
+	Type         string                 `json:"type"`
+	Description  string                 `json:"description,omitempty"`
+	Options      map[string]interface{} `json:"options,omitempty"`
+	PresetFields []string               `json:"presetFields,omitempty"`
+	Fields       []CreateFieldInput     `json:"fields,omitempty"`
+	Indexes      []Index                `json:"indexes,omitempty"`
+}
+
+type UpdateCollectionInput struct {
+	DisplayName string                 `json:"displayName,omitempty"`
 	Description string                 `json:"description,omitempty"`
 	Options     map[string]interface{} `json:"options,omitempty"`
-	Fields      []CreateFieldInput     `json:"fields,omitempty"`
 }
 
 type Field struct {
@@ -40,6 +50,32 @@ type CreateFieldInput struct {
 	IsIndexed    bool                   `json:"isIndexed,omitempty"`
 	DefaultValue interface{}            `json:"defaultValue,omitempty"`
 	Options      map[string]interface{} `json:"options,omitempty"`
+	// Relation / advanced
+	Target     string `json:"target,omitempty"`
+	ForeignKey string `json:"foreignKey,omitempty"`
+	SourceKey  string `json:"sourceKey,omitempty"`
+	Through    string `json:"through,omitempty"`
+	OtherKey   string `json:"otherKey,omitempty"`
+	TargetKey  string `json:"targetKey,omitempty"`
+	Expression string `json:"expression,omitempty"`
+	Pattern    string `json:"pattern,omitempty"`
+	AutoGenerate bool `json:"autoGenerate,omitempty"`
+	StartsAt   int    `json:"startsAt,omitempty"`
+	IncrementBy int   `json:"incrementBy,omitempty"`
+}
+
+type UpdateFieldInput struct {
+	DisplayName string                 `json:"displayName,omitempty"`
+	IsRequired  *bool                  `json:"isRequired,omitempty"`
+	IsUnique    *bool                  `json:"isUnique,omitempty"`
+	IsIndexed   *bool                  `json:"isIndexed,omitempty"`
+	Options     map[string]interface{} `json:"options,omitempty"`
+}
+
+type Index struct {
+	Name   string   `json:"name,omitempty"`
+	Fields []string `json:"fields"`
+	Unique bool     `json:"unique,omitempty"`
 }
 
 type FindOptions struct {
@@ -47,13 +83,15 @@ type FindOptions struct {
 	Sort     []string
 	Fields   []string
 	Except   []string
+	Appends  []string
 	Page     int
 	PageSize int
 }
 
 type FindOneOptions struct {
-	Fields []string
-	Except []string
+	Fields  []string
+	Except  []string
+	Appends []string
 }
 
 type ListResult struct {
@@ -67,14 +105,19 @@ type ListResult struct {
 type Filter map[string]interface{}
 
 type Script struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Content   string `json:"content"`
-	HookPoint string `json:"hookPoint"`
-	Enabled   bool   `json:"enabled"`
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	Content        string `json:"content"`
+	HookPoint      string `json:"hookPoint"`
+	CollectionName string `json:"collectionName,omitempty"`
+	APIPath        string `json:"apiPath,omitempty"`
+	HTTPMethod     string `json:"httpMethod,omitempty"`
+	Enabled        bool   `json:"enabled"`
+	Priority       int    `json:"priority,omitempty"`
 }
 
 type CreateScriptInput struct {
+	ID             int64  `json:"id,omitempty"`
 	Name           string `json:"name"`
 	Content        string `json:"content"`
 	HookPoint      string `json:"hookPoint"`
@@ -82,6 +125,12 @@ type CreateScriptInput struct {
 	APIPath        string `json:"apiPath,omitempty"`
 	HTTPMethod     string `json:"httpMethod,omitempty"`
 	Priority       int    `json:"priority,omitempty"`
+	Enabled        bool   `json:"enabled,omitempty"`
+}
+
+type ValidateScriptResult struct {
+	Valid bool   `json:"valid"`
+	Error string `json:"error,omitempty"`
 }
 
 type Response struct {

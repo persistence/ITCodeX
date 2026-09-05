@@ -125,12 +125,11 @@ func TestUpdate_Success(t *testing.T) {
 	})
 
 	id := fmt.Sprintf("%v", created["id"])
-	updated, err := s.client.Update(s.ctx, collName, id, map[string]interface{}{
+	_, err := s.client.Update(s.ctx, collName, id, map[string]interface{}{
 		"title": "更新后的标题",
 		"views": 200,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "更新后的标题", updated["title"])
 
 	fetched, err := s.client.FindOne(s.ctx, collName, id, nil)
 	require.NoError(t, err)

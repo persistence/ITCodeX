@@ -174,4 +174,28 @@ func init() {
 		*params = append(*params, "%"+str)
 		return fmt.Sprintf("%s LIKE ?", col), nil
 	})
+
+	RegisterOperator("$empty", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+		col := quoteColumn(columnName)
+		return fmt.Sprintf("(%s IS NULL OR %s = '' OR CAST(%s AS CHAR) = '[]' OR CAST(%s AS CHAR) = '{}')", col, col, col, col), nil
+	})
+
+	RegisterOperator("$notEmpty", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+		col := quoteColumn(columnName)
+		return fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND CAST(%s AS CHAR) != '[]' AND CAST(%s AS CHAR) != '{}')", col, col, col, col), nil
+	})
+
+	RegisterOperator("$includes", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+		col := quoteColumn(columnName)
+		str := cast.ToString(value)
+		*params = append(*params, "%"+str+"%")
+		return fmt.Sprintf("CAST(%s AS CHAR) LIKE ?", col), nil
+	})
+
+	RegisterOperator("$notIncludes", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+		col := quoteColumn(columnName)
+		str := cast.ToString(value)
+		*params = append(*params, "%"+str+"%")
+		return fmt.Sprintf("CAST(%s AS CHAR) NOT LIKE ?", col), nil
+	})
 }
