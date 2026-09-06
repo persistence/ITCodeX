@@ -17,7 +17,7 @@ import { useMemo, useState, type Key } from 'react'
 import { dataApi, metaApi } from '@/api'
 import { ApiError } from '@/api/client'
 import { buildFormRules, FieldControl, renderCellValue } from '@/components/FieldRenderer'
-import { isSearchableType, READONLY_ON_FORM } from '@/lib/fieldTypes'
+import { isSearchableType, isSensitiveType, READONLY_ON_FORM } from '@/lib/fieldTypes'
 import { getSettings } from '@/lib/settings'
 import type { CollectionItem, FieldItem, RecordData } from '@/types/metadata'
 
@@ -28,7 +28,7 @@ export function RecordsTab({ collection }: { collection: CollectionItem }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(settings.defaultPageSize)
   const [keyword, setKeyword] = useState('')
-  const [sort, setSort] = useState<string | undefined>('-createdAt')
+  const [sort, setSort] = useState<string | undefined>('-created_at')
   const [selected, setSelected] = useState<Key[]>([])
   const [drawer, setDrawer] = useState<'create' | 'edit' | 'view' | null>(null)
   const [current, setCurrent] = useState<RecordData | null>(null)
@@ -57,15 +57,17 @@ export function RecordsTab({ collection }: { collection: CollectionItem }) {
   }, [keyword, fields, pk])
 
   const listQuery = useQuery({
-    queryKey: ['records', collection.name, page, pageSize, keyword, sort],
-    queryFn: () =>
-      dataApi.list(collection.name, {
+    queryKey: ['records', collection.name, page, pageSize, keyword, sort, fields.map((f) => f.name).join(',')],
+    queryFn: () => {
+      const exceptNames = fields.filter((f) => isSensitiveType(f.type)).map((f) => f.name)
+      return dataApi.list(collection.name, {
         page,
         pageSize,
         sort,
         filter,
-        except: fields.some((f) => f.type === 'password') ? 'password' : undefined,
-      }),
+        except: exceptNames.length ? exceptNames.join(',') : undefined,
+      })
+    },
   })
 
   const openCreate = () => {
@@ -140,7 +142,7 @@ export function RecordsTab({ collection }: { collection: CollectionItem }) {
 
   const columns = [
     ...fields
-      .filter((f) => f.type !== 'password' && f.type !== 'encrypted')
+      .filter((f) => !isSensitiveType(f.type))
       .slice(0, 8)
       .map((f) => ({
         title: f.displayName || f.name,
@@ -194,8 +196,8 @@ export function RecordsTab({ collection }: { collection: CollectionItem }) {
           value={sort}
           onChange={setSort}
           options={[
-            { value: '-createdAt', label: '创建时间 ↓' },
-            { value: 'createdAt', label: '创建时间 ↑' },
+            { value: '-created_at', label: '创建时间 ↓' },
+            { value: 'created_at', label: '创建时间 ↑' },
             { value: `-${pk}`, label: `${pk} ↓` },
             { value: pk, label: `${pk} ↑` },
           ]}

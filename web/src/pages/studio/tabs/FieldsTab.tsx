@@ -49,12 +49,17 @@ export function FieldsTab({ collection }: { collection: CollectionItem }) {
       const enumRaw = values.enumOptions as string | undefined
       const options: Record<string, unknown> = { ...(values.options || {}) }
       if (enumRaw) {
-        options.enum = enumRaw
+        const list = enumRaw
           .split(/[,，\n]/)
-          .map((s) => s.trim())
+          .map((s: string) => s.trim())
           .filter(Boolean)
+        // 兼容后端 SelectField 读 options.options，同时保留 enum
+        options.enum = list
+        options.options = list
       }
       if (values.target) options.target = values.target
+      if (values.foreignKey) options.foreignKey = values.foreignKey
+      else if (values.foreignKey === '') delete options.foreignKey
 
       if (editing) {
         const input: UpdateFieldInput = {
@@ -134,7 +139,8 @@ export function FieldsTab({ collection }: { collection: CollectionItem }) {
   const openEdit = (field: FieldItem) => {
     setEditing(field)
     const opts = field.options || {}
-    const enumVal = Array.isArray(opts.enum) ? (opts.enum as string[]).join(', ') : ''
+    const rawOpts = opts.enum ?? opts.options
+    const enumVal = Array.isArray(rawOpts) ? (rawOpts as string[]).join(', ') : ''
     form.setFieldsValue({
       name: field.name,
       displayName: field.displayName,
@@ -144,8 +150,8 @@ export function FieldsTab({ collection }: { collection: CollectionItem }) {
       isIndexed: field.indexed,
       description: (field as FieldItem & { description?: string }).description,
       enumOptions: enumVal,
-      target: opts.target || field.target,
-      foreignKey: field.foreignKey,
+      target: (opts.target as string) || field.target,
+      foreignKey: (opts.foreignKey as string) || field.foreignKey,
       minLength: (field.validation as { minLength?: number } | undefined)?.minLength,
       maxLength: (field.validation as { maxLength?: number } | undefined)?.maxLength,
       pattern: (field.validation as { pattern?: string } | undefined)?.pattern,

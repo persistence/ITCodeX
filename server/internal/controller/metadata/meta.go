@@ -224,9 +224,7 @@ func (c *ControllerV1) ScriptSave(ctx context.Context, req *v1.ScriptSaveReq) (r
 	if script.CreatedAt == nil {
 		script.CreatedAt = now
 	}
-	if !script.Enabled {
-		script.Enabled = true
-	}
+	// 尊重请求中的 enabled；禁用请走 /disable 并卸载脚本
 
 	prefix := c.db.TablePrefix()
 	var result sql.Result
@@ -248,8 +246,12 @@ func (c *ControllerV1) ScriptSave(ctx context.Context, req *v1.ScriptSaveReq) (r
 		return nil, wrapSvcErr(err)
 	}
 	if yaegi := c.db.Yaegi(); yaegi != nil {
-		if err = yaegi.LoadScript(&script); err != nil {
-			return nil, gerror.Wrap(err, "加载脚本失败")
+		if script.Enabled {
+			if err = yaegi.LoadScript(&script); err != nil {
+				return nil, gerror.Wrap(err, "加载脚本失败")
+			}
+		} else if script.Id > 0 {
+			_ = yaegi.DisableScript(script.Id)
 		}
 	}
 	return &v1.ScriptSaveRes{YaegiScript: &script}, nil

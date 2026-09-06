@@ -90,13 +90,13 @@ export function FieldControl({ field, value, onChange, disabled }: FieldControlP
     )
   }
 
-  if (type === 'number' || type === 'integer' || type === 'percent' || type === 'sort') {
+  if (type === 'number' || type === 'double' || type === 'float' || type === 'integer' || type === 'bigint' || type === 'percent' || type === 'sort') {
     return (
       <InputNumber
         style={{ width: '100%' }}
         value={value as number | null}
         disabled={readOnly}
-        precision={type === 'integer' || type === 'sort' ? 0 : undefined}
+        precision={type === 'integer' || type === 'sort' || type === 'bigint' ? 0 : undefined}
         addonAfter={type === 'percent' ? '%' : undefined}
         onChange={(v) => onChange?.(v)}
       />
@@ -173,7 +173,22 @@ export function FieldControl({ field, value, onChange, disabled }: FieldControlP
         style={{ width: '100%' }}
         value={day}
         disabled={readOnly}
-        onChange={(d) => onChange?.(d ? d.toISOString() : null)}
+        onChange={(d) => {
+          if (!d) {
+            onChange?.(null)
+            return
+          }
+          if (type === 'date') {
+            onChange?.(d.format('YYYY-MM-DD'))
+            return
+          }
+          if (type === 'dateTimeTz') {
+            onChange?.(d.toISOString())
+            return
+          }
+          // dateTime：按本地时间写入，避免 toISOString 造成日期偏移
+          onChange?.(d.format('YYYY-MM-DD HH:mm:ss'))
+        }}
       />
     )
   }

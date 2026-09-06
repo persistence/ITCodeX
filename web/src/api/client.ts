@@ -61,7 +61,10 @@ export async function request<T>(
 
   let body: ApiResponse<T>
   try {
-    body = (await res.json()) as ApiResponse<T>
+    const text = await res.text()
+    // Snowflake 等 > Number.MAX_SAFE_INTEGER 的整数，JSON.parse 会丢精度；先转成字符串
+    const safe = text.replace(/([:\[,]\s*)(-?\d{16,})(?=\s*[,\]}])/g, '$1"$2"')
+    body = JSON.parse(safe) as ApiResponse<T>
   } catch {
     throw new ApiError(res.status || 1, `请求失败：HTTP ${res.status}`)
   }

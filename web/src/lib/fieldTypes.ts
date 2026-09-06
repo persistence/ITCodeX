@@ -1,36 +1,37 @@
 import type { FieldType } from '@/types/metadata'
 
 export interface FieldTypeOption {
-  value: FieldType
+  value: FieldType | string
   label: string
   group: string
 }
 
+/**
+ * 仅列出后端 field_factory 已注册的类型。
+ * 注意：常量里的 number / icon / chinaRegion 等若未注册，不要放进选择器。
+ */
 export const FIELD_TYPE_OPTIONS: FieldTypeOption[] = [
   { value: 'string', label: '单行文本', group: '基础' },
   { value: 'text', label: '多行文本', group: '基础' },
   { value: 'phone', label: '手机号', group: '基础' },
   { value: 'email', label: '邮箱', group: '基础' },
   { value: 'url', label: 'URL', group: '基础' },
-  { value: 'number', label: '数字', group: '基础' },
+  { value: 'double', label: '数字(双精度)', group: '基础' },
+  { value: 'float', label: '数字(单精度)', group: '基础' },
   { value: 'integer', label: '整数', group: '基础' },
+  { value: 'bigint', label: '长整数', group: '基础' },
   { value: 'percent', label: '百分比', group: '基础' },
   { value: 'color', label: '颜色', group: '基础' },
-  { value: 'icon', label: '图标', group: '基础' },
   { value: 'password', label: '密码', group: '基础' },
   { value: 'boolean', label: '勾选', group: '选择' },
   { value: 'select', label: '下拉单选', group: '选择' },
   { value: 'radio', label: '单选框组', group: '选择' },
   { value: 'multiSelect', label: '下拉多选', group: '选择' },
   { value: 'checkboxGroup', label: '复选框组', group: '选择' },
-  { value: 'chinaRegion', label: '中国行政区', group: '选择' },
   { value: 'markdown', label: 'Markdown', group: '媒体' },
   { value: 'richText', label: '富文本', group: '媒体' },
-  { value: 'markdownVditor', label: 'Markdown(Vditor)', group: '媒体' },
-  { value: 'attachmentRelation', label: '附件(关联)', group: '媒体' },
   { value: 'attachmentUrl', label: '附件(URL)', group: '媒体' },
   { value: 'dateTime', label: '日期时间', group: '日期时间' },
-  { value: 'dateTimeTz', label: '日期时间(时区)', group: '日期时间' },
   { value: 'date', label: '日期', group: '日期时间' },
   { value: 'time', label: '时间', group: '日期时间' },
   { value: 'unixTimestamp', label: 'Unix时间戳', group: '日期时间' },
@@ -49,13 +50,7 @@ export const FIELD_TYPE_OPTIONS: FieldTypeOption[] = [
   { value: 'formula', label: '公式', group: '高级' },
   { value: 'sequence', label: '自动序列', group: '高级' },
   { value: 'json', label: 'JSON', group: '高级' },
-  { value: 'tableSelector', label: '表选择器', group: '高级' },
   { value: 'encrypted', label: '加密', group: '高级' },
-  { value: 'createdAt', label: '创建时间', group: '系统' },
-  { value: 'updatedAt', label: '更新时间', group: '系统' },
-  { value: 'createdBy', label: '创建人', group: '系统' },
-  { value: 'updatedBy', label: '更新人', group: '系统' },
-  { value: 'tableOid', label: '表OID', group: '系统' },
 ]
 
 export const COLLECTION_TYPES = [
@@ -109,18 +104,6 @@ export const HOOK_POINTS = [
   'customAPI',
 ]
 
-export const SYSTEM_FIELD_TYPES = new Set([
-  'createdAt',
-  'updatedAt',
-  'createdBy',
-  'updatedBy',
-  'tableOid',
-  'uuid',
-  'nanoId',
-  'sequence',
-  'formula',
-])
-
 export const READONLY_ON_FORM = new Set([
   'createdAt',
   'updatedAt',
@@ -145,6 +128,10 @@ export function isRelationType(type: string): boolean {
   return ['belongsTo', 'hasOne', 'hasMany', 'belongsToMany', 'belongsToManyArray', 'attachmentRelation'].includes(
     type,
   )
+}
+
+export function isSensitiveType(type: string): boolean {
+  return type === 'password' || type === 'encrypted'
 }
 
 export function suggestNameFromDisplay(displayName: string): string {

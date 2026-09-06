@@ -81,6 +81,19 @@ export function ScriptsTab({ collectionName }: { collectionName?: string }) {
     onError: (e: Error) => message.error(e.message),
   })
 
+  const enableMut = useMutation({
+    mutationFn: (script: YaegiScript) =>
+      metaApi.saveScript({
+        ...script,
+        enabled: true,
+      }),
+    onSuccess: () => {
+      message.success('已启用')
+      qc.invalidateQueries({ queryKey: ['scripts'] })
+    },
+    onError: (e: Error) => message.error(e.message),
+  })
+
   const deleteMut = useMutation({
     mutationFn: (id: number) => metaApi.deleteScript(id),
     onSuccess: () => {
@@ -157,10 +170,16 @@ export function ScriptsTab({ collectionName }: { collectionName?: string }) {
                 <Button size="small" onClick={() => openEdit(row)}>
                   编辑
                 </Button>
-                {row.enabled && row.id ? (
-                  <Button size="small" onClick={() => disableMut.mutate(row.id!)}>
-                    禁用
-                  </Button>
+                {row.id ? (
+                  row.enabled ? (
+                    <Button size="small" onClick={() => disableMut.mutate(row.id!)}>
+                      禁用
+                    </Button>
+                  ) : (
+                    <Button size="small" onClick={() => enableMut.mutate(row)}>
+                      启用
+                    </Button>
+                  )
                 ) : null}
                 <Button
                   size="small"

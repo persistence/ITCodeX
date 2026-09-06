@@ -25,6 +25,7 @@ func wrapSvcErr(err error) error {
 	case *md.ForbiddenError:
 		return gerror.NewCode(gcode.New(403, e.Error(), nil), e.Error())
 	default:
-		return gerror.Wrap(err, err.Error())
+		// 不要用相同文案 Wrap，否则前端会看到「xxx: xxx」重复消息
+		return gerror.New(err.Error())
 	}
 }
