@@ -518,63 +518,6 @@ func (c *Collection) addFieldInternal(f Field) {
 	}
 }
 
-type unimplementedRepository struct {
-	coll *Collection
-}
-
-func (r *unimplementedRepository) Find(ctx context.Context, opts *FindOptions) ([]*Record, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) FindOne(ctx context.Context, opts *FindOneOptions) (*Record, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) FindAndCount(ctx context.Context, opts *FindOptions) ([]*Record, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) Count(ctx context.Context, opts *CountOptions) (int, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) Create(ctx context.Context, opts *CreateOptions) (*Record, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) CreateMany(ctx context.Context, opts *CreateManyOptions) ([]*Record, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) Update(ctx context.Context, opts *UpdateOptions) (*Record, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) Destroy(ctx context.Context, opts *DestroyOptions) (int, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) Transaction(ctx context.Context, fn func(tx Repository) error) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (r *unimplementedRepository) Collection() *Collection {
-	return r.coll
-}
-
-func (r *unimplementedRepository) ListAssociation(ctx context.Context, sourceID any, association string) ([]map[string]any, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (r *unimplementedRepository) AddAssociation(ctx context.Context, sourceID any, association string, body any) error {
-	return fmt.Errorf("not implemented")
-}
-func (r *unimplementedRepository) SetAssociation(ctx context.Context, sourceID any, association string, body any) error {
-	return fmt.Errorf("not implemented")
-}
-func (r *unimplementedRepository) RemoveAssociation(ctx context.Context, sourceID any, association string, body any) error {
-	return fmt.Errorf("not implemented")
-}
-
 func newCollection(db *Database, name string, opts ...CollectionOption) *Collection {
 	c := &Collection{
 		name:       name,
