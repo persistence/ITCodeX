@@ -51,7 +51,7 @@ func HandlerResponse(r *ghttp.Request) {
 			r.Response.WriteHeader(status)
 		}
 	}
-	r.Response.WriteJson(map[string]interface{}{
+	r.Response.WriteJson(map[string]any{
 		"code":    code,
 		"message": msg,
 		"data":    data,

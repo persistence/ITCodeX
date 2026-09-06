@@ -19,7 +19,7 @@ func setupFilterTestCollection(t *testing.T, s *TestSuite) string {
 		client.CreateFieldInput{Name: "note", Type: "string"},
 	)
 
-	testData := []map[string]interface{}{
+	testData := []map[string]any{
 		{"name": "Alice", "age": 25, "score": 85, "status": "active", "note": "has-li"},
 		{"name": "Bob", "age": 30, "score": 92, "status": "active", "note": "ok"},
 		{"name": "Charlie", "age": 35, "score": 78, "status": "inactive", "note": ""},
@@ -51,7 +51,7 @@ func TestFilter_Ne(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"status": map[string]interface{}{"$ne": "active"}},
+		Filter: client.Filter{"status": map[string]any{"$ne": "active"}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -64,7 +64,7 @@ func TestFilter_Gt(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"age": map[string]interface{}{"$gt": 30}},
+		Filter: client.Filter{"age": map[string]any{"$gt": 30}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -77,7 +77,7 @@ func TestFilter_Gte(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"age": map[string]interface{}{"$gte": 30}},
+		Filter: client.Filter{"age": map[string]any{"$gte": 30}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -90,7 +90,7 @@ func TestFilter_Lt(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"age": map[string]interface{}{"$lt": 28}},
+		Filter: client.Filter{"age": map[string]any{"$lt": 28}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -103,7 +103,7 @@ func TestFilter_Lte(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"age": map[string]interface{}{"$lte": 28}},
+		Filter: client.Filter{"age": map[string]any{"$lte": 28}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -116,7 +116,7 @@ func TestFilter_In(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"name": map[string]interface{}{"$in": []string{"Alice", "Bob"}}},
+		Filter: client.Filter{"name": map[string]any{"$in": []string{"Alice", "Bob"}}},
 	})
 	require.NoError(t, err)
 	assert.Len(t, result.List, 2)
@@ -133,7 +133,7 @@ func TestFilter_Like(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"name": map[string]interface{}{"$like": "A%"}},
+		Filter: client.Filter{"name": map[string]any{"$like": "A%"}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -146,7 +146,7 @@ func TestFilter_StartsWith(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"name": map[string]interface{}{"$startsWith": "A"}},
+		Filter: client.Filter{"name": map[string]any{"$startsWith": "A"}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -159,7 +159,7 @@ func TestFilter_EndsWith(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"name": map[string]interface{}{"$endsWith": "e"}},
+		Filter: client.Filter{"name": map[string]any{"$endsWith": "e"}},
 	})
 	require.NoError(t, err)
 	for _, r := range result.List {
@@ -239,7 +239,7 @@ func TestFilter_Empty(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"note": map[string]interface{}{"$empty": true}},
+		Filter: client.Filter{"note": map[string]any{"$empty": true}},
 	})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(result.List), 1)
@@ -250,7 +250,7 @@ func TestFilter_NotEmpty(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"name": map[string]interface{}{"$notEmpty": true}},
+		Filter: client.Filter{"name": map[string]any{"$notEmpty": true}},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 5, len(result.List))
@@ -261,7 +261,7 @@ func TestFilter_Includes(t *testing.T) {
 	collName := setupFilterTestCollection(t, s)
 
 	result, err := s.client.List(s.ctx, collName, &client.FindOptions{
-		Filter: client.Filter{"note": map[string]interface{}{"$includes": "li"}},
+		Filter: client.Filter{"note": map[string]any{"$includes": "li"}},
 	})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(result.List), 1) // Alice note has-li

@@ -33,12 +33,12 @@ type DatabaseOptions struct {
 }
 
 type CollectionOptions struct {
-	SimplePagination   bool                   `json:"simplePagination,omitempty"`
-	TreeParentKey      string                 `json:"treeParentKey,omitempty"`
-	CalendarStartField string                 `json:"calendarStartField,omitempty"`
-	CalendarEndField   string                 `json:"calendarEndField,omitempty"`
-	CommentForeignKey  string                 `json:"commentForeignKey,omitempty"`
-	Extra              map[string]interface{} `json:"extra,omitempty"`
+	SimplePagination   bool           `json:"simplePagination,omitempty"`
+	TreeParentKey      string         `json:"treeParentKey,omitempty"`
+	CalendarStartField string         `json:"calendarStartField,omitempty"`
+	CalendarEndField   string         `json:"calendarEndField,omitempty"`
+	CommentForeignKey  string         `json:"commentForeignKey,omitempty"`
+	Extra              map[string]any `json:"extra,omitempty"`
 }
 
 type SortableConfig struct {
@@ -47,11 +47,11 @@ type SortableConfig struct {
 }
 
 type Index struct {
-	ID      int64                  `json:"id,omitempty"`
-	Name    string                 `json:"name,omitempty"`
-	Fields  []string               `json:"fields"`
-	Unique  bool                   `json:"unique,omitempty"`
-	Options map[string]interface{} `json:"options,omitempty"`
+	ID      int64          `json:"id,omitempty"`
+	Name    string         `json:"name,omitempty"`
+	Fields  []string       `json:"fields"`
+	Unique  bool           `json:"unique,omitempty"`
+	Options map[string]any `json:"options,omitempty"`
 }
 
 type CreateCollectionInput struct {
@@ -81,10 +81,10 @@ type CreateFieldInput struct {
 	IsRequired       bool                   `json:"isRequired,omitempty"`
 	IsUnique         bool                   `json:"isUnique,omitempty"`
 	IsIndexed        bool                   `json:"isIndexed,omitempty"`
-	DefaultValue     interface{}            `json:"defaultValue,omitempty"`
+	DefaultValue     any                    `json:"defaultValue,omitempty"`
 	Description      string                 `json:"description,omitempty"`
 	Sort             int                    `json:"sort,omitempty"`
-	Options          map[string]interface{} `json:"options,omitempty"`
+	Options          map[string]any         `json:"options,omitempty"`
 	Validation       *FieldValidationConfig `json:"validation,omitempty"`
 	ValidationRules  []CELRule              `json:"validationRules,omitempty"`
 	Target           string                 `json:"target,omitempty"`
@@ -145,7 +145,7 @@ type TableCELRule struct {
 	Dependencies []string `json:"dependencies,omitempty"`
 }
 
-type Filter map[string]interface{}
+type Filter map[string]any
 type Sort []string
 type Fields []string
 type Appends []string
@@ -160,10 +160,10 @@ type CommonOptions struct {
 }
 
 type UpdateCollectionInput struct {
-	DisplayName string                 `json:"displayName,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Categories  []string               `json:"categories,omitempty"`
-	Options     CollectionOptions      `json:"options,omitempty"`
+	DisplayName string            `json:"displayName,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Categories  []string          `json:"categories,omitempty"`
+	Options     CollectionOptions `json:"options,omitempty"`
 }
 
 type UpdateFieldInput struct {
@@ -171,23 +171,23 @@ type UpdateFieldInput struct {
 	IsRequired  *bool                  `json:"isRequired,omitempty"`
 	IsUnique    *bool                  `json:"isUnique,omitempty"`
 	IsIndexed   *bool                  `json:"isIndexed,omitempty"`
-	Options     map[string]interface{} `json:"options,omitempty"`
+	Options     map[string]any         `json:"options,omitempty"`
 	Validation  *FieldValidationConfig `json:"validation,omitempty"`
 	Sort        *int                   `json:"sort,omitempty"`
 }
 
 type FindOptions struct {
 	CommonOptions
-	FilterByTk interface{} `json:"filterByTk,omitempty"`
-	Limit      int         `json:"limit,omitempty"`
-	Offset     int         `json:"offset,omitempty"`
-	Page       int         `json:"page,omitempty"`
-	PageSize   int         `json:"pageSize,omitempty"`
+	FilterByTk any `json:"filterByTk,omitempty"`
+	Limit      int `json:"limit,omitempty"`
+	Offset     int `json:"offset,omitempty"`
+	Page       int `json:"page,omitempty"`
+	PageSize   int `json:"pageSize,omitempty"`
 }
 
 type FindOneOptions struct {
 	CommonOptions
-	FilterByTk interface{} `json:"filterByTk,omitempty"`
+	FilterByTk any `json:"filterByTk,omitempty"`
 }
 
 type CountOptions struct {
@@ -196,36 +196,36 @@ type CountOptions struct {
 
 type CreateOptions struct {
 	CommonOptions
-	Values    map[string]interface{} `json:"values"`
-	Whitelist []string               `json:"whitelist,omitempty"`
-	Blacklist []string               `json:"blacklist,omitempty"`
+	Values    map[string]any `json:"values"`
+	Whitelist []string       `json:"whitelist,omitempty"`
+	Blacklist []string       `json:"blacklist,omitempty"`
 }
 
 type CreateManyOptions struct {
 	CommonOptions
-	Records   []map[string]interface{} `json:"records"`
-	Whitelist []string                 `json:"whitelist,omitempty"`
-	Blacklist []string                 `json:"blacklist,omitempty"`
+	Records   []map[string]any `json:"records"`
+	Whitelist []string         `json:"whitelist,omitempty"`
+	Blacklist []string         `json:"blacklist,omitempty"`
 }
 
 type UpdateOptions struct {
 	CommonOptions
-	FilterByTk interface{}            `json:"filterByTk,omitempty"`
-	Values     map[string]interface{} `json:"values"`
-	Whitelist  []string               `json:"whitelist,omitempty"`
-	Blacklist  []string               `json:"blacklist,omitempty"`
+	FilterByTk any            `json:"filterByTk,omitempty"`
+	Values     map[string]any `json:"values"`
+	Whitelist  []string       `json:"whitelist,omitempty"`
+	Blacklist  []string       `json:"blacklist,omitempty"`
 }
 
 type DestroyOptions struct {
 	CommonOptions
-	FilterByTk interface{} `json:"filterByTk,omitempty"`
-	Truncate   bool        `json:"truncate,omitempty"`
+	FilterByTk any  `json:"filterByTk,omitempty"`
+	Truncate   bool `json:"truncate,omitempty"`
 }
 
 type FindAndCountResult struct {
-	List       []map[string]interface{} `json:"list"`
-	Total      int                      `json:"total"`
-	Page       int                      `json:"page,omitempty"`
-	PageSize   int                      `json:"pageSize,omitempty"`
-	TotalPages int                      `json:"totalPages,omitempty"`
+	List       []map[string]any `json:"list"`
+	Total      int              `json:"total"`
+	Page       int              `json:"page,omitempty"`
+	PageSize   int              `json:"pageSize,omitempty"`
+	TotalPages int              `json:"totalPages,omitempty"`
 }

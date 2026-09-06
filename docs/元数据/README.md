@@ -140,7 +140,7 @@ import (
     "itcodex/utils"
 )
 
-func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+func BeforeCreate(ctx context.Context, data map[string]any) (map[string]any, error) {
     now := utils.Now()
     datePart := utils.FormatTime(now, "20060102")
     seq := utils.NanoID(6)
@@ -181,7 +181,7 @@ func Handle(ctx *context.YaegiHTTPContext) {
     }
 
     hashed, _ := utils.HashPassword(req.NewPassword)
-    users.UpdateByID(userID, map[string]interface{}{"password": hashed})
+    users.UpdateByID(userID, map[string]any{"password": hashed})
 
     ctx.Response.JSONSuccess(map[string]string{"message": "修改成功"})
 }

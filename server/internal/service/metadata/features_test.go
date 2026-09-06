@@ -12,7 +12,7 @@ import (
 
 func TestFilter_BuildWhereClause(t *testing.T) {
 	a := assert.New(t)
-	var params []interface{}
+	var params []any
 
 	t.Run("empty filter returns 1=1", func(t *testing.T) {
 		params = nil
@@ -31,14 +31,14 @@ func TestFilter_BuildWhereClause(t *testing.T) {
 
 	t.Run("$gt operator", func(t *testing.T) {
 		params = nil
-		sql, err := BuildWhereClause(Filter{"age": map[string]interface{}{"$gt": 18}}, &params)
+		sql, err := BuildWhereClause(Filter{"age": map[string]any{"$gt": 18}}, &params)
 		a.NoError(err)
 		a.Contains(sql, "`age` > ?")
 	})
 
 	t.Run("$in operator", func(t *testing.T) {
 		params = nil
-		sql, err := BuildWhereClause(Filter{"id": map[string]interface{}{"$in": []interface{}{1, 2, 3}}}, &params)
+		sql, err := BuildWhereClause(Filter{"id": map[string]any{"$in": []any{1, 2, 3}}}, &params)
 		a.NoError(err)
 		a.Contains(sql, "IN")
 		a.Len(params, 3)
@@ -46,7 +46,7 @@ func TestFilter_BuildWhereClause(t *testing.T) {
 
 	t.Run("$like operator", func(t *testing.T) {
 		params = nil
-		sql, err := BuildWhereClause(Filter{"title": map[string]interface{}{"$like": "%test%"}}, &params)
+		sql, err := BuildWhereClause(Filter{"title": map[string]any{"$like": "%test%"}}, &params)
 		a.NoError(err)
 		a.Contains(sql, "LIKE")
 	})
@@ -74,7 +74,7 @@ func TestFilter_BuildWhereClause(t *testing.T) {
 
 	t.Run("$isNull operator", func(t *testing.T) {
 		params = nil
-		sql, err := BuildWhereClause(Filter{"deletedAt": map[string]interface{}{"$isNull": true}}, &params)
+		sql, err := BuildWhereClause(Filter{"deletedAt": map[string]any{"$isNull": true}}, &params)
 		a.NoError(err)
 		a.Contains(sql, "IS NULL")
 	})
@@ -89,7 +89,7 @@ func TestCELValidator_RequiredField(t *testing.T) {
 	v := db.Validator()
 
 	t.Run("missing required field fails", func(t *testing.T) {
-		err := v.ValidateRecord(ctx, coll, map[string]interface{}{"age": 20}, nil, false)
+		err := v.ValidateRecord(ctx, coll, map[string]any{"age": 20}, nil, false)
 		a.Error(err)
 		var vErr *ValidationError
 		a.ErrorAs(err, &vErr)
@@ -97,7 +97,7 @@ func TestCELValidator_RequiredField(t *testing.T) {
 	})
 
 	t.Run("valid data passes", func(t *testing.T) {
-		err := v.ValidateRecord(ctx, coll, map[string]interface{}{"title": "ok", "age": 20, "status": "draft"}, nil, false)
+		err := v.ValidateRecord(ctx, coll, map[string]any{"title": "ok", "age": 20, "status": "draft"}, nil, false)
 		a.NoError(err)
 	})
 }
@@ -120,12 +120,12 @@ func TestCELValidator_MultiFieldRule(t *testing.T) {
 	v := db.Validator()
 
 	t.Run("negative age fails table rule", func(t *testing.T) {
-		err := v.ValidateRecord(ctx, coll, map[string]interface{}{"title": "t", "age": -1}, nil, false)
+		err := v.ValidateRecord(ctx, coll, map[string]any{"title": "t", "age": -1}, nil, false)
 		a.Error(err)
 	})
 
 	t.Run("positive age passes", func(t *testing.T) {
-		err := v.ValidateRecord(ctx, coll, map[string]interface{}{"title": "t", "age": 25}, nil, false)
+		err := v.ValidateRecord(ctx, coll, map[string]any{"title": "t", "age": 25}, nil, false)
 		a.NoError(err)
 	})
 }
@@ -150,7 +150,7 @@ import (
 	"context"
 )
 
-func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+func BeforeCreate(ctx context.Context, data map[string]any) (map[string]any, error) {
 	data["auto_field"] = "from_hook"
 	return data, nil
 }
@@ -165,7 +165,7 @@ func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]
 	a.NoError(err)
 
 	record, err := repo.Create(ctx, &CreateOptions{
-		Values: map[string]interface{}{"title": "hook_test", "age": 20},
+		Values: map[string]any{"title": "hook_test", "age": 20},
 	})
 	a.NoError(err)
 	a.NotNil(record)
@@ -196,12 +196,12 @@ import (
 	"itcodex/metadata"
 )
 
-func AfterCreate(ctx context.Context, result map[string]interface{}) error {
+func AfterCreate(ctx context.Context, result map[string]any) error {
 	items := metadata.Collection(ctx, "uow_child")
 	if items == nil {
 		return fmt.Errorf("child collection missing")
 	}
-	_, err := items.Create(map[string]interface{}{"title": "child_row", "age": 1})
+	_, err := items.Create(map[string]any{"title": "child_row", "age": 1})
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func AfterCreate(ctx context.Context, result map[string]interface{}) error {
 	a.NoError(err)
 
 	_, err = parent.Repository().Create(ctx, &CreateOptions{
-		Values: map[string]interface{}{"title": "parent_row", "age": 1},
+		Values: map[string]any{"title": "parent_row", "age": 1},
 	})
 	a.Error(err)
 
@@ -251,9 +251,9 @@ import (
 	"itcodex/metadata"
 )
 
-func AfterCommit(ctx context.Context, result map[string]interface{}) error {
+func AfterCommit(ctx context.Context, result map[string]any) error {
 	repo := metadata.Collection(ctx, "uow_commit")
-	_, err := repo.Update(result["id"], map[string]interface{}{"auto_field": "committed"})
+	_, err := repo.Update(result["id"], map[string]any{"auto_field": "committed"})
 	return err
 }
 `
@@ -267,7 +267,7 @@ func AfterCommit(ctx context.Context, result map[string]interface{}) error {
 	a.NoError(err)
 
 	record, err := coll.Repository().Create(ctx, &CreateOptions{
-		Values: map[string]interface{}{"title": "c1", "age": 2},
+		Values: map[string]any{"title": "c1", "age": 2},
 	})
 	a.NoError(err)
 	found, err := coll.Repository().FindOne(ctx, &FindOneOptions{FilterByTk: record.Id()})

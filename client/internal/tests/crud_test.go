@@ -20,7 +20,7 @@ func TestCreate_SingleRecord(t *testing.T) {
 		client.CreateFieldInput{Name: "views", Type: "integer"},
 	)
 
-	record := s.createTestRecord(t, collName, map[string]interface{}{
+	record := s.createTestRecord(t, collName, map[string]any{
 		"title": "测试标题",
 		"views": 100,
 	})
@@ -39,7 +39,7 @@ func TestGet_Exists(t *testing.T) {
 		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
-	created := s.createTestRecord(t, collName, map[string]interface{}{
+	created := s.createTestRecord(t, collName, map[string]any{
 		"title": "获取测试",
 	})
 
@@ -72,7 +72,7 @@ func TestList_DefaultPagination(t *testing.T) {
 	)
 
 	for i := 0; i < 5; i++ {
-		s.createTestRecord(t, collName, map[string]interface{}{
+		s.createTestRecord(t, collName, map[string]any{
 			"title": fmt.Sprintf("标题 %d", i),
 		})
 	}
@@ -94,7 +94,7 @@ func TestList_CustomPagination(t *testing.T) {
 	)
 
 	for i := 0; i < 10; i++ {
-		s.createTestRecord(t, collName, map[string]interface{}{
+		s.createTestRecord(t, collName, map[string]any{
 			"title": fmt.Sprintf("分页标题 %d", i),
 		})
 	}
@@ -119,13 +119,13 @@ func TestUpdate_Success(t *testing.T) {
 		client.CreateFieldInput{Name: "views", Type: "integer"},
 	)
 
-	created := s.createTestRecord(t, collName, map[string]interface{}{
+	created := s.createTestRecord(t, collName, map[string]any{
 		"title": "原标题",
 		"views": 0,
 	})
 
 	id := fmt.Sprintf("%v", created["id"])
-	_, err := s.client.Update(s.ctx, collName, id, map[string]interface{}{
+	_, err := s.client.Update(s.ctx, collName, id, map[string]any{
 		"title": "更新后的标题",
 		"views": 200,
 	})
@@ -145,7 +145,7 @@ func TestUpdate_NotFound(t *testing.T) {
 		client.CreateFieldInput{Name: "title", Type: "string"},
 	)
 
-	_, err := s.client.Update(s.ctx, collName, "999999", map[string]interface{}{
+	_, err := s.client.Update(s.ctx, collName, "999999", map[string]any{
 		"title": "不存在",
 	})
 	require.Error(t, err)
@@ -159,7 +159,7 @@ func TestDelete_Success(t *testing.T) {
 		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
-	created := s.createTestRecord(t, collName, map[string]interface{}{
+	created := s.createTestRecord(t, collName, map[string]any{
 		"title": "要删除的",
 	})
 
@@ -198,7 +198,7 @@ func TestBulkDelete_WithFilter(t *testing.T) {
 		if i < 2 {
 			status = "deleted"
 		}
-		s.createTestRecord(t, collName, map[string]interface{}{
+		s.createTestRecord(t, collName, map[string]any{
 			"status": status,
 		})
 	}
@@ -218,7 +218,7 @@ func TestCount_Success(t *testing.T) {
 	)
 
 	for i := 0; i < 8; i++ {
-		s.createTestRecord(t, collName, map[string]interface{}{
+		s.createTestRecord(t, collName, map[string]any{
 			"name": fmt.Sprintf("计数 %d", i),
 		})
 	}

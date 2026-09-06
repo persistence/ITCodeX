@@ -43,11 +43,11 @@ func (c *Client) List(ctx context.Context, collection string, opts *FindOptions)
 	if err != nil {
 		return nil, err
 	}
-	m, _ := resp.(map[string]interface{})
+	m, _ := resp.(map[string]any)
 	return parseListResult(m["data"])
 }
 
-func (c *Client) FindOne(ctx context.Context, collection, id string, opts *FindOneOptions) (map[string]interface{}, error) {
+func (c *Client) FindOne(ctx context.Context, collection, id string, opts *FindOneOptions) (map[string]any, error) {
 	params := make(map[string]string)
 	if opts != nil {
 		if len(opts.Fields) > 0 {
@@ -65,48 +65,48 @@ func (c *Client) FindOne(ctx context.Context, collection, id string, opts *FindO
 	if err != nil {
 		return nil, err
 	}
-	m, _ := resp.(map[string]interface{})
-	record, ok := m["data"].(map[string]interface{})
+	m, _ := resp.(map[string]any)
+	record, ok := m["data"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
 	}
 	return record, nil
 }
 
-func (c *Client) Create(ctx context.Context, collection string, data map[string]interface{}) (map[string]interface{}, error) {
+func (c *Client) Create(ctx context.Context, collection string, data map[string]any) (map[string]any, error) {
 	resp, err := c.post(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), data)
 	if err != nil {
 		return nil, err
 	}
-	m, _ := resp.(map[string]interface{})
-	record, ok := m["data"].(map[string]interface{})
+	m, _ := resp.(map[string]any)
+	record, ok := m["data"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected response data type: %T", m["data"])
 	}
 	return record, nil
 }
 
-func (c *Client) CreateMany(ctx context.Context, collection string, records []map[string]interface{}) ([]map[string]interface{}, error) {
+func (c *Client) CreateMany(ctx context.Context, collection string, records []map[string]any) ([]map[string]any, error) {
 	resp, err := c.post(ctx, fmt.Sprintf("/api/c/%s/batch", url.PathEscape(collection)), records)
 	if err != nil {
 		return nil, err
 	}
-	m, _ := resp.(map[string]interface{})
+	m, _ := resp.(map[string]any)
 	data := m["data"]
 	switch v := data.(type) {
-	case []interface{}:
-		out := make([]map[string]interface{}, 0, len(v))
+	case []any:
+		out := make([]map[string]any, 0, len(v))
 		for _, item := range v {
-			if rec, ok := item.(map[string]interface{}); ok {
+			if rec, ok := item.(map[string]any); ok {
 				out = append(out, rec)
 			}
 		}
 		return out, nil
-	case map[string]interface{}:
-		if list, ok := v["list"].([]interface{}); ok {
-			out := make([]map[string]interface{}, 0, len(list))
+	case map[string]any:
+		if list, ok := v["list"].([]any); ok {
+			out := make([]map[string]any, 0, len(list))
 			for _, item := range list {
-				if rec, ok := item.(map[string]interface{}); ok {
+				if rec, ok := item.(map[string]any); ok {
 					out = append(out, rec)
 				}
 			}
@@ -116,18 +116,18 @@ func (c *Client) CreateMany(ctx context.Context, collection string, records []ma
 	return nil, fmt.Errorf("unexpected batch response: %T", data)
 }
 
-func (c *Client) Update(ctx context.Context, collection, id string, data map[string]interface{}) (map[string]interface{}, error) {
+func (c *Client) Update(ctx context.Context, collection, id string, data map[string]any) (map[string]any, error) {
 	resp, err := c.put(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), data)
 	if err != nil {
 		return nil, err
 	}
-	m, _ := resp.(map[string]interface{})
+	m, _ := resp.(map[string]any)
 	switch v := m["data"].(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return v, nil
 	default:
 		// some update handlers return {affected:n}
-		return map[string]interface{}{"affected": asInt64(v)}, nil
+		return map[string]any{"affected": asInt64(v)}, nil
 	}
 }
 
@@ -168,20 +168,20 @@ func (c *Client) Count(ctx context.Context, collection string, filter Filter) (i
 	if err != nil {
 		return 0, err
 	}
-	m, _ := resp.(map[string]interface{})
-	data, _ := m["data"].(map[string]interface{})
+	m, _ := resp.(map[string]any)
+	data, _ := m["data"].(map[string]any)
 	if data == nil {
 		return 0, fmt.Errorf("unexpected count response")
 	}
 	return asInt64(data["count"]), nil
 }
 
-func extractAffected(resp interface{}) int64 {
-	m, _ := resp.(map[string]interface{})
+func extractAffected(resp any) int64 {
+	m, _ := resp.(map[string]any)
 	if m == nil {
 		return 0
 	}
-	if data, ok := m["data"].(map[string]interface{}); ok {
+	if data, ok := m["data"].(map[string]any); ok {
 		return asInt64(data["affected"])
 	}
 	return asInt64(m["affected"])
@@ -198,8 +198,8 @@ func joinStrings(items []string, sep string) string {
 	return result
 }
 
-func parseListResult(data interface{}) (*ListResult, error) {
-	m, ok := data.(map[string]interface{})
+func parseListResult(data any) (*ListResult, error) {
+	m, ok := data.(map[string]any)
 	if !ok {
 		if data == nil {
 			return &ListResult{}, nil
@@ -220,10 +220,10 @@ func parseListResult(data interface{}) (*ListResult, error) {
 		result.TotalPages = int(asInt64(v))
 	}
 	if v, ok := m["list"]; ok {
-		if list, ok := v.([]interface{}); ok {
-			result.List = make([]map[string]interface{}, 0, len(list))
+		if list, ok := v.([]any); ok {
+			result.List = make([]map[string]any, 0, len(list))
 			for _, item := range list {
-				if rec, ok := item.(map[string]interface{}); ok {
+				if rec, ok := item.(map[string]any); ok {
 					result.List = append(result.List, rec)
 				}
 			}

@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	snowflakeEpoch     = int64(1704067200000)
-	snowflakeMachineBits = uint(10)
+	snowflakeEpoch        = int64(1704067200000)
+	snowflakeMachineBits  = uint(10)
 	snowflakeSequenceBits = uint(12)
 	snowflakeMaxMachineID = int64(-1) ^ (int64(-1) << snowflakeMachineBits)
 	snowflakeMaxSequence  = int64(-1) ^ (int64(-1) << snowflakeSequenceBits)

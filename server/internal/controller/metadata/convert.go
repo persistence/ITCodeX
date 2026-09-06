@@ -64,7 +64,7 @@ func collectionCategories(c *md.Collection) []string {
 	switch v := raw.(type) {
 	case []string:
 		return v
-	case []interface{}:
+	case []any:
 		out := make([]string, 0, len(v))
 		for _, item := range v {
 			if s, ok := item.(string); ok {
@@ -77,12 +77,12 @@ func collectionCategories(c *md.Collection) []string {
 	}
 }
 
-func collectionPublicOptions(c *md.Collection) map[string]interface{} {
+func collectionPublicOptions(c *md.Collection) map[string]any {
 	opts := c.Options()
 	if opts == nil {
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
-	out := make(map[string]interface{}, len(opts))
+	out := make(map[string]any, len(opts))
 	for k, v := range opts {
 		if k == "description" || k == "categories" {
 			continue

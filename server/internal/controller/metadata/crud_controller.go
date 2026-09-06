@@ -34,7 +34,7 @@ func (cc *CRUDController) repo(r *ghttp.Request) (md.Repository, bool) {
 	return coll.Repository(), true
 }
 
-func parseID(raw string) interface{} {
+func parseID(raw string) any {
 	if raw == "" {
 		return nil
 	}
@@ -44,20 +44,20 @@ func parseID(raw string) interface{} {
 	return raw
 }
 
-func parseJSONBody(raw []byte) (interface{}, error) {
+func parseJSONBody(raw []byte) (any, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
-	var body interface{}
+	var body any
 	if err := dec.Decode(&body); err != nil {
 		return nil, err
 	}
 	return normalizeJSONNumbers(body), nil
 }
 
-func normalizeJSONNumbers(v interface{}) interface{} {
+func normalizeJSONNumbers(v any) any {
 	switch val := v.(type) {
 	case json.Number:
 		if i, err := val.Int64(); err == nil {
@@ -67,12 +67,12 @@ func normalizeJSONNumbers(v interface{}) interface{} {
 			return f
 		}
 		return val.String()
-	case map[string]interface{}:
+	case map[string]any:
 		for k, vv := range val {
 			val[k] = normalizeJSONNumbers(vv)
 		}
 		return val
-	case []interface{}:
+	case []any:
 		for i, vv := range val {
 			val[i] = normalizeJSONNumbers(vv)
 		}
@@ -89,13 +89,13 @@ func parseFilter(r *ghttp.Request) (md.Filter, bool) {
 	}
 	dec := json.NewDecoder(bytes.NewReader([]byte(filterStr)))
 	dec.UseNumber()
-	var raw interface{}
+	var raw any
 	if err := dec.Decode(&raw); err != nil {
 		writeFail(r, http.StatusBadRequest, 1, "filter 参数必须是有效的JSON", nil)
 		return nil, false
 	}
 	raw = normalizeJSONNumbers(raw)
-	m, ok := raw.(map[string]interface{})
+	m, ok := raw.(map[string]any)
 	if !ok {
 		writeFail(r, http.StatusBadRequest, 1, "filter 参数必须是 JSON 对象", nil)
 		return nil, false
@@ -161,7 +161,7 @@ func (cc *CRUDController) List(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	list := make([]map[string]interface{}, 0, len(records))
+	list := make([]map[string]any, 0, len(records))
 	for _, rec := range records {
 		list = append(list, rec.Data())
 	}
@@ -169,7 +169,7 @@ func (cc *CRUDController) List(r *ghttp.Request) {
 	if total > 0 && pageSize > 0 {
 		totalPages = (total + pageSize - 1) / pageSize
 	}
-	writeOK(r, map[string]interface{}{
+	writeOK(r, map[string]any{
 		"list": list, "total": total, "page": page, "pageSize": pageSize, "totalPages": totalPages,
 	})
 }
@@ -190,7 +190,7 @@ func (cc *CRUDController) Count(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"count": n})
+	writeOK(r, map[string]any{"count": n})
 }
 
 func (cc *CRUDController) Get(r *ghttp.Request) {
@@ -213,7 +213,7 @@ func (cc *CRUDController) Create(r *ghttp.Request) {
 	if !ok {
 		return
 	}
-	var values map[string]interface{}
+	var values map[string]any
 	if err := json.Unmarshal(r.GetBody(), &values); err != nil {
 		writeFail(r, http.StatusBadRequest, 1, "请求体解析失败: "+err.Error(), nil)
 		return
@@ -231,7 +231,7 @@ func (cc *CRUDController) CreateMany(r *ghttp.Request) {
 	if !ok {
 		return
 	}
-	var records []map[string]interface{}
+	var records []map[string]any
 	if err := json.Unmarshal(r.GetBody(), &records); err != nil {
 		writeFail(r, http.StatusBadRequest, 1, "请求体必须是对象数组", nil)
 		return
@@ -241,7 +241,7 @@ func (cc *CRUDController) CreateMany(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	list := make([]map[string]interface{}, 0, len(created))
+	list := make([]map[string]any, 0, len(created))
 	for _, rec := range created {
 		list = append(list, rec.Data())
 	}
@@ -253,7 +253,7 @@ func (cc *CRUDController) Update(r *ghttp.Request) {
 	if !ok {
 		return
 	}
-	var values map[string]interface{}
+	var values map[string]any
 	if err := json.Unmarshal(r.GetBody(), &values); err != nil {
 		writeFail(r, http.StatusBadRequest, 1, "请求体解析失败: "+err.Error(), nil)
 		return
@@ -270,11 +270,11 @@ func (cc *CRUDController) Update(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	data := interface{}(nil)
+	data := any(nil)
 	if record != nil {
 		data = record.Data()
 	}
-	writeOK(r, map[string]interface{}{"record": data, "affected": affected})
+	writeOK(r, map[string]any{"record": data, "affected": affected})
 }
 
 func (cc *CRUDController) UpdateMany(r *ghttp.Request) {
@@ -290,7 +290,7 @@ func (cc *CRUDController) UpdateMany(r *ghttp.Request) {
 		writeFail(r, http.StatusBadRequest, 1, "批量更新必须提供 filter", nil)
 		return
 	}
-	var values map[string]interface{}
+	var values map[string]any
 	if err := json.Unmarshal(r.GetBody(), &values); err != nil {
 		writeFail(r, http.StatusBadRequest, 1, "请求体解析失败: "+err.Error(), nil)
 		return
@@ -308,7 +308,7 @@ func (cc *CRUDController) UpdateMany(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"affected": affected})
+	writeOK(r, map[string]any{"affected": affected})
 }
 
 func (cc *CRUDController) Destroy(r *ghttp.Request) {
@@ -321,7 +321,7 @@ func (cc *CRUDController) Destroy(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"affected": affected})
+	writeOK(r, map[string]any{"affected": affected})
 }
 
 func (cc *CRUDController) DestroyMany(r *ghttp.Request) {
@@ -347,7 +347,7 @@ func (cc *CRUDController) DestroyMany(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"affected": affected})
+	writeOK(r, map[string]any{"affected": affected})
 }
 
 func (cc *CRUDController) AssociationList(r *ghttp.Request) {
@@ -361,7 +361,7 @@ func (cc *CRUDController) AssociationList(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"list": list})
+	writeOK(r, map[string]any{"list": list})
 }
 
 func (cc *CRUDController) AssociationAdd(r *ghttp.Request) {
@@ -378,7 +378,7 @@ func (cc *CRUDController) AssociationAdd(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"ok": true})
+	writeOK(r, map[string]any{"ok": true})
 }
 
 func (cc *CRUDController) AssociationSet(r *ghttp.Request) {
@@ -395,7 +395,7 @@ func (cc *CRUDController) AssociationSet(r *ghttp.Request) {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"ok": true})
+	writeOK(r, map[string]any{"ok": true})
 }
 
 func (cc *CRUDController) AssociationRemove(r *ghttp.Request) {
@@ -411,16 +411,16 @@ func (cc *CRUDController) AssociationRemove(r *ghttp.Request) {
 	// DELETE body may be stripped; accept ?targetId= (not ?id=, which shadows path :id)
 	if body == nil {
 		if qid := r.GetQuery("targetId").String(); qid != "" {
-			body = map[string]interface{}{"id": parseID(qid)}
+			body = map[string]any{"id": parseID(qid)}
 		} else if qid := r.GetQuery("fk").String(); qid != "" {
-			body = map[string]interface{}{"id": parseID(qid)}
+			body = map[string]any{"id": parseID(qid)}
 		}
 	}
 	if err := repo.RemoveAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
 		writeLogicError(r, err)
 		return
 	}
-	writeOK(r, map[string]interface{}{"ok": true})
+	writeOK(r, map[string]any{"ok": true})
 }
 
 func splitAndTrim(s string) []string {

@@ -171,7 +171,7 @@ func (m *DefaultYaegiManager) ExecuteCustomAPI(script *modelmd.YaegiScript, ctx 
 	return nil
 }
 
-func (m *DefaultYaegiManager) ExecuteBeforeCreate(ctx context.Context, coll *Collection, data map[string]interface{}) (result map[string]interface{}, err error) {
+func (m *DefaultYaegiManager) ExecuteBeforeCreate(ctx context.Context, coll *Collection, data map[string]any) (result map[string]any, err error) {
 	result = data
 	hooks := m.getHooks(coll.Name(), HookPointBeforeCreate)
 	for _, inst := range hooks {
@@ -191,7 +191,7 @@ func (m *DefaultYaegiManager) ExecuteBeforeCreate(ctx context.Context, coll *Col
 			args := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(result)}
 			returns := fn.Call(args)
 			if len(returns) >= 2 {
-				if newData, ok := returns[0].Interface().(map[string]interface{}); ok && newData != nil {
+				if newData, ok := returns[0].Interface().(map[string]any); ok && newData != nil {
 					result = newData
 				}
 				if hookErr, ok := returns[1].Interface().(error); ok && hookErr != nil {
@@ -262,7 +262,7 @@ func (m *DefaultYaegiManager) ExecuteAfterCommit(ctx context.Context, coll *Coll
 	return err
 }
 
-func (m *DefaultYaegiManager) ExecuteBeforeUpdate(ctx context.Context, coll *Collection, data map[string]interface{}, filter Filter) (result map[string]interface{}, err error) {
+func (m *DefaultYaegiManager) ExecuteBeforeUpdate(ctx context.Context, coll *Collection, data map[string]any, filter Filter) (result map[string]any, err error) {
 	result = data
 	hooks := m.getHooks(coll.Name(), HookPointBeforeUpdate)
 	for _, inst := range hooks {
@@ -282,7 +282,7 @@ func (m *DefaultYaegiManager) ExecuteBeforeUpdate(ctx context.Context, coll *Col
 			args := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(result)}
 			returns := fn.Call(args)
 			if len(returns) >= 2 {
-				if newData, ok := returns[0].Interface().(map[string]interface{}); ok && newData != nil {
+				if newData, ok := returns[0].Interface().(map[string]any); ok && newData != nil {
 					result = newData
 				}
 				if hookErr, ok := returns[1].Interface().(error); ok && hookErr != nil {
@@ -310,7 +310,7 @@ func (m *DefaultYaegiManager) ExecuteAfterUpdate(ctx context.Context, coll *Coll
 			if !ok || !fn.IsValid() {
 				return
 			}
-			dataList := make([]map[string]interface{}, 0, len(records))
+			dataList := make([]map[string]any, 0, len(records))
 			for _, r := range records {
 				dataList = append(dataList, r.Data())
 			}

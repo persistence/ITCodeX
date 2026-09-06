@@ -28,7 +28,7 @@ func Now() time.Time {
 	return time.Now()
 }
 
-func ToJSON(v interface{}) (string, error) {
+func ToJSON(v any) (string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return "", err
@@ -36,8 +36,8 @@ func ToJSON(v interface{}) (string, error) {
 	return string(b), nil
 }
 
-func FromJSON(s string) (map[string]interface{}, error) {
-	out := map[string]interface{}{}
+func FromJSON(s string) (map[string]any, error) {
+	out := map[string]any{}
 	if err := json.Unmarshal([]byte(s), &out); err != nil {
 		return nil, err
 	}

@@ -22,7 +22,7 @@ package main
 
 import "context"
 
-func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+func BeforeCreate(ctx context.Context, data map[string]any) (map[string]any, error) {
 	data["auto_field"] = "from_hook"
 	return data, nil
 }
@@ -44,7 +44,7 @@ func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]
 		_ = s.client.DeleteScript(s.ctx, script.ID)
 	})
 
-	rec := s.createTestRecord(t, coll, map[string]interface{}{"title": "t"})
+	rec := s.createTestRecord(t, coll, map[string]any{"title": "t"})
 	assert.Equal(t, "from_hook", rec["auto_field"])
 
 	err = s.client.DisableScript(s.ctx, script.ID)

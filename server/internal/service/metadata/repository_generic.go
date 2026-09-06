@@ -16,15 +16,15 @@ type txDB struct {
 	tx *sql.Tx
 }
 
-func (t *txDB) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (t *txDB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return t.tx.ExecContext(ctx, query, args...)
 }
 
-func (t *txDB) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (t *txDB) Query(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return t.tx.QueryContext(ctx, query, args...)
 }
 
-func (t *txDB) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (t *txDB) QueryRow(ctx context.Context, query string, args ...any) *sql.Row {
 	return t.tx.QueryRowContext(ctx, query, args...)
 }
 
@@ -172,8 +172,8 @@ func (r *GenericRepository) scanRows(rows *sql.Rows, fields []Field) ([]*Record,
 
 	var records []*Record
 	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		scanArgs := make([]interface{}, len(columns))
+		values := make([]any, len(columns))
+		scanArgs := make([]any, len(columns))
 		for i := range values {
 			scanArgs[i] = &values[i]
 		}
@@ -182,7 +182,7 @@ func (r *GenericRepository) scanRows(rows *sql.Rows, fields []Field) ([]*Record,
 			return nil, NewSystemError(err)
 		}
 
-		data := make(map[string]interface{})
+		data := make(map[string]any)
 		for i, col := range columns {
 			val := values[i]
 			if f, ok := fieldMap[col]; ok {
@@ -213,7 +213,7 @@ func (r *GenericRepository) scanRows(rows *sql.Rows, fields []Field) ([]*Record,
 	return records, nil
 }
 
-func (r *GenericRepository) filterFieldsByWhitelist(data map[string]interface{}, whitelist []string, blacklist []string) map[string]interface{} {
+func (r *GenericRepository) filterFieldsByWhitelist(data map[string]any, whitelist []string, blacklist []string) map[string]any {
 	if len(whitelist) == 0 && len(blacklist) == 0 {
 		return data
 	}
@@ -223,7 +223,7 @@ func (r *GenericRepository) filterFieldsByWhitelist(data map[string]interface{},
 		blackSet[b] = true
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 
 	if len(whitelist) > 0 {
 		whiteSet := make(map[string]bool)
@@ -246,7 +246,7 @@ func (r *GenericRepository) filterFieldsByWhitelist(data map[string]interface{},
 	return result
 }
 
-func (r *GenericRepository) applySystemFieldsForCreate(ctx context.Context, data map[string]interface{}) (int64, time.Time) {
+func (r *GenericRepository) applySystemFieldsForCreate(ctx context.Context, data map[string]any) (int64, time.Time) {
 	now := time.Now()
 	var id int64
 
@@ -281,9 +281,9 @@ func (r *GenericRepository) applySystemFieldsForCreate(ctx context.Context, data
 	return id, now
 }
 
-func (r *GenericRepository) convertValuesToStore(data map[string]interface{}) ([]string, []interface{}, error) {
+func (r *GenericRepository) convertValuesToStore(data map[string]any) ([]string, []any, error) {
 	var columns []string
-	var args []interface{}
+	var args []any
 
 	for k, v := range data {
 		f := r.coll.GetField(k)
@@ -301,7 +301,7 @@ func (r *GenericRepository) convertValuesToStore(data map[string]interface{}) ([
 	return columns, args, nil
 }
 
-func (r *GenericRepository) applyAutoFields(values map[string]interface{}) error {
+func (r *GenericRepository) applyAutoFields(values map[string]any) error {
 	for _, f := range r.coll.Fields() {
 		name := f.Name()
 		switch FieldType(f.Type()) {
@@ -356,10 +356,10 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 		opts = &CreateOptions{}
 	}
 	if opts.Values == nil {
-		opts.Values = make(map[string]interface{})
+		opts.Values = make(map[string]any)
 	}
 
-	values := make(map[string]interface{})
+	values := make(map[string]any)
 	for k, v := range opts.Values {
 		values[k] = v
 	}
@@ -496,7 +496,7 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 		fieldNames[i] = quoteIdent(f.Name())
 	}
 
-	var params []interface{}
+	var params []any
 	filter := opts.Filter
 	if filter == nil {
 		filter = make(Filter)
@@ -623,7 +623,7 @@ func (r *GenericRepository) Count(ctx context.Context, opts *CountOptions) (int,
 		opts = &CountOptions{}
 	}
 
-	var params []interface{}
+	var params []any
 	filter := opts.Filter
 	if filter == nil {
 		filter = make(Filter)
@@ -666,10 +666,10 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 		return nil, 0, fmt.Errorf("update options required")
 	}
 	if opts.Values == nil {
-		opts.Values = make(map[string]interface{})
+		opts.Values = make(map[string]any)
 	}
 
-	values := make(map[string]interface{})
+	values := make(map[string]any)
 	for k, v := range opts.Values {
 		values[k] = v
 	}
@@ -703,7 +703,7 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 	}
 
 	single := false
-	var singleId interface{}
+	var singleId any
 	if opts.FilterByTk != nil {
 		single = true
 		singleId = opts.FilterByTk
@@ -711,7 +711,7 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 	}
 
 	// Fetch existing records for update validation (oldData)
-	var oldData map[string]interface{}
+	var oldData map[string]any
 	if single {
 		old, err := r.FindOne(ctx, &FindOneOptions{FilterByTk: singleId})
 		if err == nil && old != nil {
@@ -735,7 +735,7 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 	}
 
 	var setClauses []string
-	var params []interface{}
+	var params []any
 
 	for k, v := range values {
 		f := r.coll.GetField(k)
@@ -832,7 +832,7 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 	}
 
 	var filter Filter
-	var params []interface{}
+	var params []any
 
 	emptyFilter := (opts.Filter == nil || len(opts.Filter) == 0) && opts.FilterByTk == nil
 	if opts.Truncate || (emptyFilter && r.coll.Db() != nil && r.coll.Db().AllowTruncate()) {

@@ -12,14 +12,14 @@ import (
 
 func TestFilter_EmptyAndIncludes(t *testing.T) {
 	a := assert.New(t)
-	var params []interface{}
+	var params []any
 
-	sql, err := BuildWhereClause(Filter{"title": map[string]interface{}{"$empty": true}}, &params)
+	sql, err := BuildWhereClause(Filter{"title": map[string]any{"$empty": true}}, &params)
 	a.NoError(err)
 	a.Contains(sql, "IS NULL")
 
 	params = nil
-	sql, err = BuildWhereClause(Filter{"title": map[string]interface{}{"$includes": "ab"}}, &params)
+	sql, err = BuildWhereClause(Filter{"title": map[string]any{"$includes": "ab"}}, &params)
 	a.NoError(err)
 	a.Contains(sql, "LIKE")
 	a.Equal("%ab%", params[0])
@@ -27,7 +27,7 @@ func TestFilter_EmptyAndIncludes(t *testing.T) {
 
 func TestPasswordHash(t *testing.T) {
 	a := assert.New(t)
-	f, err := NewPasswordField(nil, map[string]interface{}{"name": "pwd"})
+	f, err := NewPasswordField(nil, map[string]any{"name": "pwd"})
 	a.NoError(err)
 	stored, err := f.ToStoreValue("secret")
 	a.NoError(err)
@@ -54,10 +54,10 @@ func TestRelationBelongsToAppends(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	author, err := authors.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{"name": "Alice"}})
+	author, err := authors.Repository().Create(ctx, &CreateOptions{Values: map[string]any{"name": "Alice"}})
 	require.NoError(t, err)
 
-	post, err := posts.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{
+	post, err := posts.Repository().Create(ctx, &CreateOptions{Values: map[string]any{
 		"title": "Hello", "author_id": author.Id(),
 	}})
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestRelationBelongsToAppends(t *testing.T) {
 	require.NoError(t, err)
 	rel := found.Get("author_id")
 	// after appends, author_id may be object when field name equals FK
-	if m, ok := rel.(map[string]interface{}); ok {
+	if m, ok := rel.(map[string]any); ok {
 		a.Equal("Alice", m["name"])
 	}
 
@@ -103,17 +103,17 @@ func TestHasManyAssociationSet(t *testing.T) {
 	_ = posts
 
 	users := db.Collection("users_hm")
-	user, err := users.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{"name": "u1"}})
+	user, err := users.Repository().Create(ctx, &CreateOptions{Values: map[string]any{"name": "u1"}})
 	require.NoError(t, err)
 
-	p1, err := posts.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "p1"}})
+	p1, err := posts.Repository().Create(ctx, &CreateOptions{Values: map[string]any{"title": "p1"}})
 	require.NoError(t, err)
-	p2, err := posts.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "p2"}})
+	p2, err := posts.Repository().Create(ctx, &CreateOptions{Values: map[string]any{"title": "p2"}})
 	require.NoError(t, err)
 
-	err = users.Repository().SetAssociation(ctx, user.Id(), "posts", []interface{}{
-		map[string]interface{}{"id": p1.Id()},
-		map[string]interface{}{"id": p2.Id()},
+	err = users.Repository().SetAssociation(ctx, user.Id(), "posts", []any{
+		map[string]any{"id": p1.Id()},
+		map[string]any{"id": p2.Id()},
 	})
 	a.NoError(err)
 
@@ -122,7 +122,7 @@ func TestHasManyAssociationSet(t *testing.T) {
 		CommonOptions: CommonOptions{Appends: Appends{"posts"}},
 	})
 	require.NoError(t, err)
-	list, ok := found.Get("posts").([]map[string]interface{})
+	list, ok := found.Get("posts").([]map[string]any)
 	a.True(ok)
 	a.Len(list, 2)
 }
@@ -143,9 +143,9 @@ func TestPhase5Fields_SequenceUUIDEncrypted(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	rec, err := coll.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{
+	rec, err := coll.Repository().Create(ctx, &CreateOptions{Values: map[string]any{
 		"secret": "hello",
-		"loc":    map[string]interface{}{"type": "Point", "coordinates": []interface{}{1.0, 2.0}},
+		"loc":    map[string]any{"type": "Point", "coordinates": []any{1.0, 2.0}},
 	}})
 	require.NoError(t, err)
 	a.NotEmpty(rec.Get("code"))
@@ -165,9 +165,9 @@ func TestTreeChildrenAppend(t *testing.T) {
 	require.NoError(t, err)
 	a.True(coll.HasField("parent_id"))
 
-	root, err := coll.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "root"}})
+	root, err := coll.Repository().Create(ctx, &CreateOptions{Values: map[string]any{"title": "root"}})
 	require.NoError(t, err)
-	_, err = coll.Repository().Create(ctx, &CreateOptions{Values: map[string]interface{}{
+	_, err = coll.Repository().Create(ctx, &CreateOptions{Values: map[string]any{
 		"title": "child", "parent_id": root.Id(),
 	}})
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestTreeChildrenAppend(t *testing.T) {
 		CommonOptions: CommonOptions{Appends: Appends{"children"}},
 	})
 	require.NoError(t, err)
-	children, ok := found.Get("children").([]map[string]interface{})
+	children, ok := found.Get("children").([]map[string]any)
 	a.True(ok)
 	a.Len(children, 1)
 }

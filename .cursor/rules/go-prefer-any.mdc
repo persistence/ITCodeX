@@ -1,0 +1,26 @@
+---
+description: Go 代码使用 any，禁止 interface{}
+globs: "{server,client}/**/*.go"
+alwaysApply: false
+---
+
+# Prefer `any` over `interface{}`
+
+在 `server/`、`client/` 的 Go 代码中，空接口一律写 `any`，不要写 `interface{}`。
+
+`any` 是 Go 1.18+ 对 `interface{}` 的别名，语义相同；本项目统一用 `any`。
+
+```go
+// ❌ BAD
+var v interface{}
+func f(x map[string]interface{}) {}
+args ...interface{}
+
+// ✅ GOOD
+var v any
+func f(x map[string]any) {}
+args ...any
+```
+
+编辑或新增 Go 代码时：若发现 `interface{}`，改为 `any`。
+不要改 `.agents/` 下的第三方/技能参考文档。

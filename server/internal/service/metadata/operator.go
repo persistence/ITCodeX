@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cast"
 )
 
-type OperatorFunc func(columnName string, value interface{}, params *[]interface{}) (string, error)
+type OperatorFunc func(columnName string, value any, params *[]any) (string, error)
 
 var operators = make(map[string]OperatorFunc)
 
@@ -25,7 +25,7 @@ func quoteColumn(name string) string {
 }
 
 func init() {
-	RegisterOperator("$eq", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$eq", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		if value == nil {
 			return fmt.Sprintf("%s IS NULL", col), nil
@@ -34,7 +34,7 @@ func init() {
 		return fmt.Sprintf("%s = ?", col), nil
 	})
 
-	RegisterOperator("$ne", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$ne", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		if value == nil {
 			return fmt.Sprintf("%s IS NOT NULL", col), nil
@@ -43,35 +43,35 @@ func init() {
 		return fmt.Sprintf("%s != ?", col), nil
 	})
 
-	RegisterOperator("$gt", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$gt", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		*params = append(*params, value)
 		return fmt.Sprintf("%s > ?", col), nil
 	})
 
-	RegisterOperator("$gte", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$gte", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		*params = append(*params, value)
 		return fmt.Sprintf("%s >= ?", col), nil
 	})
 
-	RegisterOperator("$lt", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$lt", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		*params = append(*params, value)
 		return fmt.Sprintf("%s < ?", col), nil
 	})
 
-	RegisterOperator("$lte", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$lte", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		*params = append(*params, value)
 		return fmt.Sprintf("%s <= ?", col), nil
 	})
 
-	RegisterOperator("$in", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$in", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
-		var slice []interface{}
+		var slice []any
 		switch v := value.(type) {
-		case []interface{}:
+		case []any:
 			slice = v
 		default:
 			slice = cast.ToSlice(value)
@@ -87,11 +87,11 @@ func init() {
 		return fmt.Sprintf("%s IN (%s)", col, strings.Join(placeholders, ", ")), nil
 	})
 
-	RegisterOperator("$notIn", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$notIn", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
-		var slice []interface{}
+		var slice []any
 		switch v := value.(type) {
-		case []interface{}:
+		case []any:
 			slice = v
 		default:
 			slice = cast.ToSlice(value)
@@ -107,33 +107,33 @@ func init() {
 		return fmt.Sprintf("%s NOT IN (%s)", col, strings.Join(placeholders, ", ")), nil
 	})
 
-	RegisterOperator("$like", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$like", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		*params = append(*params, value)
 		return fmt.Sprintf("%s LIKE ?", col), nil
 	})
 
-	RegisterOperator("$notLike", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$notLike", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		*params = append(*params, value)
 		return fmt.Sprintf("%s NOT LIKE ?", col), nil
 	})
 
-	RegisterOperator("$isNull", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$isNull", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		return fmt.Sprintf("%s IS NULL", col), nil
 	})
 
-	RegisterOperator("$notNull", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$notNull", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		return fmt.Sprintf("%s IS NOT NULL", col), nil
 	})
 
-	RegisterOperator("$between", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$between", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
-		var slice []interface{}
+		var slice []any
 		switch v := value.(type) {
-		case []interface{}:
+		case []any:
 			slice = v
 		default:
 			slice = cast.ToSlice(value)
@@ -145,11 +145,11 @@ func init() {
 		return fmt.Sprintf("%s BETWEEN ? AND ?", col), nil
 	})
 
-	RegisterOperator("$notBetween", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$notBetween", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
-		var slice []interface{}
+		var slice []any
 		switch v := value.(type) {
-		case []interface{}:
+		case []any:
 			slice = v
 		default:
 			slice = cast.ToSlice(value)
@@ -161,38 +161,38 @@ func init() {
 		return fmt.Sprintf("%s NOT BETWEEN ? AND ?", col), nil
 	})
 
-	RegisterOperator("$startsWith", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$startsWith", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		str := cast.ToString(value)
 		*params = append(*params, str+"%")
 		return fmt.Sprintf("%s LIKE ?", col), nil
 	})
 
-	RegisterOperator("$endsWith", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$endsWith", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		str := cast.ToString(value)
 		*params = append(*params, "%"+str)
 		return fmt.Sprintf("%s LIKE ?", col), nil
 	})
 
-	RegisterOperator("$empty", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$empty", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		return fmt.Sprintf("(%s IS NULL OR %s = '' OR CAST(%s AS CHAR) = '[]' OR CAST(%s AS CHAR) = '{}')", col, col, col, col), nil
 	})
 
-	RegisterOperator("$notEmpty", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$notEmpty", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		return fmt.Sprintf("(%s IS NOT NULL AND %s != '' AND CAST(%s AS CHAR) != '[]' AND CAST(%s AS CHAR) != '{}')", col, col, col, col), nil
 	})
 
-	RegisterOperator("$includes", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$includes", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		str := cast.ToString(value)
 		*params = append(*params, "%"+str+"%")
 		return fmt.Sprintf("CAST(%s AS CHAR) LIKE ?", col), nil
 	})
 
-	RegisterOperator("$notIncludes", func(columnName string, value interface{}, params *[]interface{}) (string, error) {
+	RegisterOperator("$notIncludes", func(columnName string, value any, params *[]any) (string, error) {
 		col := quoteColumn(columnName)
 		str := cast.ToString(value)
 		*params = append(*params, "%"+str+"%")

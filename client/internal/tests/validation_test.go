@@ -18,7 +18,7 @@ func TestValidation_Required(t *testing.T) {
 		client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
 	)
 
-	_, err := s.client.Create(s.ctx, collName, map[string]interface{}{
+	_, err := s.client.Create(s.ctx, collName, map[string]any{
 		"other": "value",
 	})
 	require.Error(t, err)
@@ -33,12 +33,12 @@ func TestValidation_Unique(t *testing.T) {
 		client.CreateFieldInput{Name: "code", Type: "string", IsRequired: true, IsUnique: true},
 	)
 
-	_, err := s.client.Create(s.ctx, collName, map[string]interface{}{
+	_, err := s.client.Create(s.ctx, collName, map[string]any{
 		"code": "UNIQUE001",
 	})
 	require.NoError(t, err)
 
-	_, err = s.client.Create(s.ctx, collName, map[string]interface{}{
+	_, err = s.client.Create(s.ctx, collName, map[string]any{
 		"code": "UNIQUE001",
 	})
 	require.Error(t, err)
@@ -52,7 +52,7 @@ func TestValidation_Email(t *testing.T) {
 		client.CreateFieldInput{Name: "email", Type: "email", IsRequired: true},
 	)
 
-	_, err := s.client.Create(s.ctx, collName, map[string]interface{}{
+	_, err := s.client.Create(s.ctx, collName, map[string]any{
 		"email": "not-an-email",
 	})
 	require.Error(t, err)
@@ -69,7 +69,7 @@ func TestCreate_WithAllFields(t *testing.T) {
 		client.CreateFieldInput{Name: "active", Type: "boolean"},
 	)
 
-	record, err := s.client.Create(s.ctx, collName, map[string]interface{}{
+	record, err := s.client.Create(s.ctx, collName, map[string]any{
 		"name":   "Test User",
 		"email":  "t***@example.com",
 		"age":    25,

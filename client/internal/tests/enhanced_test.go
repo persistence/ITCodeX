@@ -18,7 +18,7 @@ func TestField_SequenceUUIDEncrypted(t *testing.T) {
 		client.CreateFieldInput{Name: "secret", Type: "encrypted"},
 	)
 
-	rec := s.createTestRecord(t, coll, map[string]interface{}{
+	rec := s.createTestRecord(t, coll, map[string]any{
 		"secret": "hello-secret",
 	})
 	assert.NotEmpty(t, rec["code"])
@@ -33,10 +33,10 @@ func TestField_PointGeo(t *testing.T) {
 		client.CreateFieldInput{Name: "loc", Type: "point"},
 	)
 
-	rec := s.createTestRecord(t, coll, map[string]interface{}{
-		"loc": map[string]interface{}{
+	rec := s.createTestRecord(t, coll, map[string]any{
+		"loc": map[string]any{
 			"type":        "Point",
-			"coordinates": []interface{}{116.4, 39.9},
+			"coordinates": []any{116.4, 39.9},
 		},
 	})
 	assert.NotNil(t, rec["loc"])
@@ -61,8 +61,8 @@ func TestCollection_TreeChildren(t *testing.T) {
 	}
 	assert.True(t, hasParent, "tree collection should have parent_id")
 
-	root := s.createTestRecord(t, coll, map[string]interface{}{"title": "root"})
-	_ = s.createTestRecord(t, coll, map[string]interface{}{
+	root := s.createTestRecord(t, coll, map[string]any{"title": "root"})
+	_ = s.createTestRecord(t, coll, map[string]any{
 		"title": "child", "parent_id": root["id"],
 	})
 

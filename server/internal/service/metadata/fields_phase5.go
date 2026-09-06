@@ -25,17 +25,17 @@ type FormulaField struct {
 	BaseField
 }
 
-func (f *FormulaField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *FormulaField) ToStoreValue(value any) (any, error) {
 	return value, nil
 }
 
-func NewFormulaField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewFormulaField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeFormula), DataTypeVarchar, opts)
 	return &FormulaField{BaseField: bf}, nil
 }
 
 // EvaluateFormula computes expression against data using CEL when available.
-func EvaluateFormula(coll *Collection, expression string, data map[string]interface{}) (interface{}, error) {
+func EvaluateFormula(coll *Collection, expression string, data map[string]any) (any, error) {
 	if expression == "" {
 		return nil, nil
 	}
@@ -47,7 +47,7 @@ func EvaluateFormula(coll *Collection, expression string, data map[string]interf
 	if err != nil {
 		return nil, err
 	}
-	out, err := v.evalProgram(prog, map[string]interface{}{"data": data, "oldData": map[string]interface{}{}})
+	out, err := v.evalProgram(prog, map[string]any{"data": data, "oldData": map[string]any{}})
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func encryptKeyFromConfig() string {
 	return "itcodex-default-encrypt-key"
 }
 
-func (f *EncryptedField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *EncryptedField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -78,7 +78,7 @@ func (f *EncryptedField) ToStoreValue(value interface{}) (interface{}, error) {
 	return utils.EncryptAESGCM(encryptKeyFromConfig(), s)
 }
 
-func (f *EncryptedField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *EncryptedField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -101,7 +101,7 @@ func (f *EncryptedField) FromStoreValue(value interface{}) (interface{}, error) 
 	return plain, nil
 }
 
-func NewEncryptedField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewEncryptedField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeEncrypted), DataTypeText, opts)
 	return &EncryptedField{BaseField: bf}, nil
 }
@@ -110,16 +110,16 @@ type GeoJSONField struct {
 	BaseField
 }
 
-func (f *GeoJSONField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *GeoJSONField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
 	if value == nil {
 		return nil
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		m = v
 	case string:
 		if err := json.Unmarshal([]byte(v), &m); err != nil {
@@ -145,7 +145,7 @@ func (f *GeoJSONField) ValidateValue(ctx context.Context, value interface{}) err
 	return nil
 }
 
-func (f *GeoJSONField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *GeoJSONField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -156,7 +156,7 @@ func (f *GeoJSONField) ToStoreValue(value interface{}) (interface{}, error) {
 	return string(b), nil
 }
 
-func (f *GeoJSONField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *GeoJSONField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -169,23 +169,23 @@ func (f *GeoJSONField) FromStoreValue(value interface{}) (interface{}, error) {
 	default:
 		return value, nil
 	}
-	var out interface{}
+	var out any
 	if err := json.Unmarshal([]byte(s), &out); err != nil {
 		return s, nil
 	}
 	return out, nil
 }
 
-func NewPointField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewPointField(coll *Collection, opts map[string]any) (Field, error) {
 	return &GeoJSONField{BaseField: newBaseField(string(FieldTypePoint), DataTypeJSON, opts)}, nil
 }
-func NewLineStringField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewLineStringField(coll *Collection, opts map[string]any) (Field, error) {
 	return &GeoJSONField{BaseField: newBaseField(string(FieldTypeLineString), DataTypeJSON, opts)}, nil
 }
-func NewPolygonField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewPolygonField(coll *Collection, opts map[string]any) (Field, error) {
 	return &GeoJSONField{BaseField: newBaseField(string(FieldTypePolygon), DataTypeJSON, opts)}, nil
 }
-func NewCircleField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewCircleField(coll *Collection, opts map[string]any) (Field, error) {
 	return &GeoJSONField{BaseField: newBaseField(string(FieldTypeCircle), DataTypeJSON, opts)}, nil
 }
 
@@ -193,7 +193,7 @@ type SortField struct {
 	BaseField
 }
 
-func NewSortField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewSortField(coll *Collection, opts map[string]any) (Field, error) {
 	return &SortField{BaseField: newBaseField(string(FieldTypeSort), DataTypeInteger, opts)}, nil
 }
 
@@ -201,7 +201,7 @@ type SequenceField struct {
 	BaseField
 }
 
-func NewSequenceField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewSequenceField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeSequence), DataTypeVarchar, opts)
 	if bf.length <= 0 {
 		bf.length = 64
@@ -248,14 +248,14 @@ type UUIDField struct {
 	BaseField
 }
 
-func (f *UUIDField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *UUIDField) ToStoreValue(value any) (any, error) {
 	if value == nil || cast.ToString(value) == "" {
 		return utils.UUID(), nil
 	}
 	return value, nil
 }
 
-func NewUUIDField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewUUIDField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeUUID), DataTypeUUID, opts)
 	opts["autoGenerate"] = true
 	return &UUIDField{BaseField: bf}, nil
@@ -265,14 +265,14 @@ type NanoIDField struct {
 	BaseField
 }
 
-func (f *NanoIDField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *NanoIDField) ToStoreValue(value any) (any, error) {
 	if value == nil || cast.ToString(value) == "" {
 		return utils.NanoID(), nil
 	}
 	return value, nil
 }
 
-func NewNanoIDField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewNanoIDField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeNanoID), DataTypeVarchar, opts)
 	if bf.length <= 0 {
 		bf.length = 21
@@ -285,7 +285,7 @@ type BelongsToManyArrayField struct {
 	BaseField
 }
 
-func (f *BelongsToManyArrayField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *BelongsToManyArrayField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -296,7 +296,7 @@ func (f *BelongsToManyArrayField) ToStoreValue(value interface{}) (interface{}, 
 	return string(b), nil
 }
 
-func (f *BelongsToManyArrayField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *BelongsToManyArrayField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -309,14 +309,14 @@ func (f *BelongsToManyArrayField) FromStoreValue(value interface{}) (interface{}
 	default:
 		return value, nil
 	}
-	var out interface{}
+	var out any
 	if err := json.Unmarshal([]byte(s), &out); err != nil {
 		return s, nil
 	}
 	return out, nil
 }
 
-func NewBelongsToManyArrayField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewBelongsToManyArrayField(coll *Collection, opts map[string]any) (Field, error) {
 	return &BelongsToManyArrayField{
 		BaseField: newBaseField(string(FieldTypeBelongsToManyArray), DataTypeJSON, opts),
 	}, nil

@@ -43,7 +43,7 @@ func printUsage() {
 	fmt.Println("  test-client ping              - Check client configuration")
 }
 
-func printJSON(v interface{}) {
+func printJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(v)

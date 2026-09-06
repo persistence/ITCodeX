@@ -20,7 +20,7 @@ type Collection struct {
 	type_           CollectionType
 	fields          map[string]Field
 	fieldOrder      []string
-	opts            map[string]interface{}
+	opts            map[string]any
 	tableName       string
 	db              *Database
 	repo            Repository
@@ -78,7 +78,7 @@ func (c *Collection) TableName() string {
 	return c.tableName
 }
 
-func (c *Collection) Options() map[string]interface{} {
+func (c *Collection) Options() map[string]any {
 	return c.opts
 }
 
@@ -133,7 +133,7 @@ func (c *Collection) AddField(ctx context.Context, input CreateFieldInput) error
 		return NewAlreadyExistsError("字段", "name", input.Name)
 	}
 
-	opts := make(map[string]interface{})
+	opts := make(map[string]any)
 	opts["name"] = input.Name
 	opts["displayName"] = input.DisplayName
 	opts["required"] = input.IsRequired
@@ -368,7 +368,7 @@ func (c *Collection) UpdateMeta(ctx context.Context, input UpdateCollectionInput
 		c.displayName = input.DisplayName
 	}
 	if c.opts == nil {
-		c.opts = make(map[string]interface{})
+		c.opts = make(map[string]any)
 	}
 	if input.Description != "" {
 		c.opts["description"] = input.Description
@@ -406,7 +406,7 @@ func (c *Collection) UpdateField(ctx context.Context, name string, input UpdateF
 
 	opts := f.Options()
 	if opts == nil {
-		opts = make(map[string]interface{})
+		opts = make(map[string]any)
 	}
 	if input.DisplayName != "" {
 		opts["displayName"] = input.DisplayName
@@ -562,16 +562,16 @@ func (r *unimplementedRepository) Collection() *Collection {
 	return r.coll
 }
 
-func (r *unimplementedRepository) ListAssociation(ctx context.Context, sourceID interface{}, association string) ([]map[string]interface{}, error) {
+func (r *unimplementedRepository) ListAssociation(ctx context.Context, sourceID any, association string) ([]map[string]any, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (r *unimplementedRepository) AddAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+func (r *unimplementedRepository) AddAssociation(ctx context.Context, sourceID any, association string, body any) error {
 	return fmt.Errorf("not implemented")
 }
-func (r *unimplementedRepository) SetAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+func (r *unimplementedRepository) SetAssociation(ctx context.Context, sourceID any, association string, body any) error {
 	return fmt.Errorf("not implemented")
 }
-func (r *unimplementedRepository) RemoveAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+func (r *unimplementedRepository) RemoveAssociation(ctx context.Context, sourceID any, association string, body any) error {
 	return fmt.Errorf("not implemented")
 }
 
@@ -581,7 +581,7 @@ func newCollection(db *Database, name string, opts ...CollectionOption) *Collect
 		type_:      CollectionTypeGeneral,
 		fields:     make(map[string]Field),
 		fieldOrder: make([]string, 0),
-		opts:       make(map[string]interface{}),
+		opts:       make(map[string]any),
 		db:         db,
 		isNew:      true,
 	}
@@ -610,7 +610,7 @@ func WithType(t CollectionType) CollectionOption {
 	}
 }
 
-func WithOptions(opts map[string]interface{}) CollectionOption {
+func WithOptions(opts map[string]any) CollectionOption {
 	return func(c *Collection) {
 		c.opts = opts
 	}
@@ -623,7 +623,7 @@ func (d *Database) buildCollectionFromModel(m *modelmd.Collection) (*Collection,
 		type_:       CollectionType(m.Type),
 		fields:      make(map[string]Field),
 		fieldOrder:  make([]string, 0),
-		opts:        make(map[string]interface{}),
+		opts:        make(map[string]any),
 		tableName:   d.TablePrefix() + m.Name,
 		db:          d,
 		isNew:       false,

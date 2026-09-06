@@ -13,8 +13,8 @@ type Repository interface {
 	Destroy(ctx context.Context, opts *DestroyOptions) (int, error)
 	Transaction(ctx context.Context, fn func(tx Repository) error) error
 	Collection() *Collection
-	ListAssociation(ctx context.Context, sourceID interface{}, association string) ([]map[string]interface{}, error)
-	AddAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error
-	SetAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error
-	RemoveAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error
+	ListAssociation(ctx context.Context, sourceID any, association string) ([]map[string]any, error)
+	AddAssociation(ctx context.Context, sourceID any, association string, body any) error
+	SetAssociation(ctx context.Context, sourceID any, association string, body any) error
+	RemoveAssociation(ctx context.Context, sourceID any, association string, body any) error
 }

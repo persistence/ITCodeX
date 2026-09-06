@@ -50,7 +50,7 @@ func NewValidationError() *ValidationError {
 type NotFoundError struct {
 	Resource string `json:"resource"`
 	Key      string `json:"key"`
-	Value    interface{} `json:"value"`
+	Value    any    `json:"value"`
 }
 
 func (e *NotFoundError) Error() string {
@@ -60,7 +60,7 @@ func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("%s 不存在", e.Resource)
 }
 
-func NewNotFoundError(resource string, key string, value interface{}) *NotFoundError {
+func NewNotFoundError(resource string, key string, value any) *NotFoundError {
 	return &NotFoundError{
 		Resource: resource,
 		Key:      key,
@@ -71,14 +71,14 @@ func NewNotFoundError(resource string, key string, value interface{}) *NotFoundE
 type AlreadyExistsError struct {
 	Resource string `json:"resource"`
 	Key      string `json:"key"`
-	Value    interface{} `json:"value"`
+	Value    any    `json:"value"`
 }
 
 func (e *AlreadyExistsError) Error() string {
 	return fmt.Sprintf("%s 已存在: %s=%v", e.Resource, e.Key, e.Value)
 }
 
-func NewAlreadyExistsError(resource string, key string, value interface{}) *AlreadyExistsError {
+func NewAlreadyExistsError(resource string, key string, value any) *AlreadyExistsError {
 	return &AlreadyExistsError{
 		Resource: resource,
 		Key:      key,

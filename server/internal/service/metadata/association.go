@@ -67,7 +67,7 @@ func (r *GenericRepository) loadBelongsTo(ctx context.Context, records []*Record
 	if fkCol == "" {
 		fkCol = f.Name()
 	}
-	ids := make([]interface{}, 0, len(records))
+	ids := make([]any, 0, len(records))
 	idSet := map[string]bool{}
 	for _, rec := range records {
 		id := rec.Get(fkCol)
@@ -112,7 +112,7 @@ func (r *GenericRepository) loadHasMany(ctx context.Context, records []*Record, 
 	if target == nil {
 		return nil
 	}
-	ids := make([]interface{}, 0, len(records))
+	ids := make([]any, 0, len(records))
 	for _, rec := range records {
 		ids = append(ids, rec.Get(ro.SourceKey))
 	}
@@ -123,7 +123,7 @@ func (r *GenericRepository) loadHasMany(ctx context.Context, records []*Record, 
 	if err != nil {
 		return err
 	}
-	grouped := map[string][]map[string]interface{}{}
+	grouped := map[string][]map[string]any{}
 	for _, rel := range related {
 		key := cast.ToString(rel.Get(ro.ForeignKey))
 		grouped[key] = append(grouped[key], rel.Data())
@@ -133,7 +133,7 @@ func (r *GenericRepository) loadHasMany(ctx context.Context, records []*Record, 
 		if list, ok := grouped[key]; ok {
 			rec.Set(f.Name(), list)
 		} else {
-			rec.Set(f.Name(), []map[string]interface{}{})
+			rec.Set(f.Name(), []map[string]any{})
 		}
 	}
 	return nil
@@ -145,7 +145,7 @@ func (r *GenericRepository) loadHasOne(ctx context.Context, records []*Record, f
 	}
 	for _, rec := range records {
 		v := rec.Get(f.Name())
-		if list, ok := v.([]map[string]interface{}); ok {
+		if list, ok := v.([]map[string]any); ok {
 			if len(list) > 0 {
 				rec.Set(f.Name(), list[0])
 			} else {
@@ -170,9 +170,9 @@ func (r *GenericRepository) loadBelongsToMany(ctx context.Context, records []*Re
 		if err != nil {
 			return NewSystemError(err)
 		}
-		var targetIDs []interface{}
+		var targetIDs []any
 		for rows.Next() {
-			var tid interface{}
+			var tid any
 			if err := rows.Scan(&tid); err != nil {
 				rows.Close()
 				return NewSystemError(err)
@@ -181,7 +181,7 @@ func (r *GenericRepository) loadBelongsToMany(ctx context.Context, records []*Re
 		}
 		rows.Close()
 		if len(targetIDs) == 0 {
-			rec.Set(f.Name(), []map[string]interface{}{})
+			rec.Set(f.Name(), []map[string]any{})
 			continue
 		}
 		related, err := target.Repository().Find(ctx, &FindOptions{
@@ -191,7 +191,7 @@ func (r *GenericRepository) loadBelongsToMany(ctx context.Context, records []*Re
 		if err != nil {
 			return err
 		}
-		list := make([]map[string]interface{}, 0, len(related))
+		list := make([]map[string]any, 0, len(related))
 		for _, rel := range related {
 			list = append(list, rel.Data())
 		}
@@ -216,7 +216,7 @@ func (r *GenericRepository) loadBelongsToManyArray(ctx context.Context, records 
 		raw := rec.Get(f.Name())
 		ids := toInterfaceSlice(raw)
 		if len(ids) == 0 {
-			rec.Set(f.Name()+"_items", []map[string]interface{}{})
+			rec.Set(f.Name()+"_items", []map[string]any{})
 			continue
 		}
 		related, err := target.Repository().Find(ctx, &FindOptions{
@@ -226,7 +226,7 @@ func (r *GenericRepository) loadBelongsToManyArray(ctx context.Context, records 
 		if err != nil {
 			return err
 		}
-		list := make([]map[string]interface{}, 0, len(related))
+		list := make([]map[string]any, 0, len(related))
 		for _, rel := range related {
 			list = append(list, rel.Data())
 		}
@@ -242,7 +242,7 @@ func (r *GenericRepository) loadTreeChildren(ctx context.Context, records []*Rec
 			parentKey = v
 		}
 	}
-	ids := make([]interface{}, 0, len(records))
+	ids := make([]any, 0, len(records))
 	for _, rec := range records {
 		ids = append(ids, rec.Get(DefaultPrimaryKey))
 	}
@@ -253,7 +253,7 @@ func (r *GenericRepository) loadTreeChildren(ctx context.Context, records []*Rec
 	if err != nil {
 		return err
 	}
-	grouped := map[string][]map[string]interface{}{}
+	grouped := map[string][]map[string]any{}
 	for _, ch := range children {
 		key := cast.ToString(ch.Get(parentKey))
 		grouped[key] = append(grouped[key], ch.Data())
@@ -263,27 +263,27 @@ func (r *GenericRepository) loadTreeChildren(ctx context.Context, records []*Rec
 		if list, ok := grouped[key]; ok {
 			rec.Set("children", list)
 		} else {
-			rec.Set("children", []map[string]interface{}{})
+			rec.Set("children", []map[string]any{})
 		}
 	}
 	return nil
 }
 
-func toInterfaceSlice(raw interface{}) []interface{} {
+func toInterfaceSlice(raw any) []any {
 	if raw == nil {
 		return nil
 	}
 	switch v := raw.(type) {
-	case []interface{}:
+	case []any:
 		return v
 	case []int64:
-		out := make([]interface{}, len(v))
+		out := make([]any, len(v))
 		for i, x := range v {
 			out[i] = x
 		}
 		return out
 	case string:
-		var out []interface{}
+		var out []any
 		_ = json.Unmarshal([]byte(v), &out)
 		return out
 	default:
@@ -291,31 +291,31 @@ func toInterfaceSlice(raw interface{}) []interface{} {
 		if err != nil {
 			return nil
 		}
-		var out []interface{}
+		var out []any
 		_ = json.Unmarshal(b, &out)
 		return out
 	}
 }
 
 // extractAssociationValue normalizes nested association payloads into FK or ID lists.
-func extractAssociationIDs(value interface{}) []interface{} {
+func extractAssociationIDs(value any) []any {
 	if value == nil {
 		return nil
 	}
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		if id, ok := v["id"]; ok {
-			return []interface{}{normalizeAssocID(id)}
+			return []any{normalizeAssocID(id)}
 		}
 		return nil
-	case []interface{}:
-		var ids []interface{}
+	case []any:
+		var ids []any
 		for _, item := range v {
 			ids = append(ids, extractAssociationIDs(item)...)
 		}
 		return ids
-	case []map[string]interface{}:
-		var ids []interface{}
+	case []map[string]any:
+		var ids []any
 		for _, item := range v {
 			if id, ok := item["id"]; ok {
 				ids = append(ids, normalizeAssocID(id))
@@ -323,11 +323,11 @@ func extractAssociationIDs(value interface{}) []interface{} {
 		}
 		return ids
 	default:
-		return []interface{}{normalizeAssocID(v)}
+		return []any{normalizeAssocID(v)}
 	}
 }
 
-func normalizeAssocID(v interface{}) interface{} {
+func normalizeAssocID(v any) any {
 	if v == nil {
 		return nil
 	}
@@ -362,9 +362,9 @@ func normalizeAssocID(v interface{}) interface{} {
 
 // processAssociationWrites handles nested relation values on create/update.
 // Returns cleaned values (relation virtual keys removed; belongsTo FK set) and deferred association ops.
-func (r *GenericRepository) processAssociationWrites(ctx context.Context, values map[string]interface{}, isCreate bool) (map[string]interface{}, map[string]interface{}, error) {
-	assocPending := map[string]interface{}{}
-	cleaned := make(map[string]interface{}, len(values))
+func (r *GenericRepository) processAssociationWrites(ctx context.Context, values map[string]any, isCreate bool) (map[string]any, map[string]any, error) {
+	assocPending := map[string]any{}
+	cleaned := make(map[string]any, len(values))
 	for k, v := range values {
 		cleaned[k] = v
 	}
@@ -409,7 +409,7 @@ func (r *GenericRepository) processAssociationWrites(ctx context.Context, values
 	return cleaned, assocPending, nil
 }
 
-func (r *GenericRepository) applyPendingAssociations(ctx context.Context, recordID interface{}, pending map[string]interface{}) error {
+func (r *GenericRepository) applyPendingAssociations(ctx context.Context, recordID any, pending map[string]any) error {
 	for name, val := range pending {
 		f := r.coll.GetField(name)
 		if f == nil {
@@ -423,7 +423,7 @@ func (r *GenericRepository) applyPendingAssociations(ctx context.Context, record
 }
 
 // ListAssociation returns related records for association field.
-func (r *GenericRepository) ListAssociation(ctx context.Context, sourceID interface{}, association string) ([]map[string]interface{}, error) {
+func (r *GenericRepository) ListAssociation(ctx context.Context, sourceID any, association string) ([]map[string]any, error) {
 	f := r.coll.GetField(association)
 	if f == nil {
 		return nil, NewNotFoundError("关联字段", "name", association)
@@ -437,22 +437,22 @@ func (r *GenericRepository) ListAssociation(ctx context.Context, sourceID interf
 	}
 	v := rec.Get(association)
 	switch t := v.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		return t, nil
-	case map[string]interface{}:
+	case map[string]any:
 		if t == nil {
-			return []map[string]interface{}{}, nil
+			return []map[string]any{}, nil
 		}
-		return []map[string]interface{}{t}, nil
+		return []map[string]any{t}, nil
 	case nil:
-		return []map[string]interface{}{}, nil
+		return []map[string]any{}, nil
 	default:
-		return []map[string]interface{}{}, nil
+		return []map[string]any{}, nil
 	}
 }
 
 // AddAssociation adds related ids (POST).
-func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID any, association string, body any) error {
 	if !r.inWriteUnit(ctx) {
 		return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
 			return repo.AddAssociation(ctx, sourceID, association, body)
@@ -472,7 +472,7 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interfa
 		_, _, err := r.Update(ctx, &UpdateOptions{
 			CommonOptions: CommonOptions{},
 			FilterByTk:    sourceID,
-			Values:        map[string]interface{}{f.Name(): ids[0]},
+			Values:        map[string]any{f.Name(): ids[0]},
 		})
 		return err
 	case FieldTypeHasMany, FieldTypeHasOne:
@@ -511,7 +511,7 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interfa
 }
 
 // SetAssociation replaces association (PUT).
-func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID any, association string, body any) error {
 	if !r.inWriteUnit(ctx) {
 		return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
 			return repo.SetAssociation(ctx, sourceID, association, body)
@@ -555,7 +555,7 @@ func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID interfa
 }
 
 // RemoveAssociation removes association (DELETE).
-func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID any, association string, body any) error {
 	if !r.inWriteUnit(ctx) {
 		return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
 			return repo.RemoveAssociation(ctx, sourceID, association, body)
@@ -571,7 +571,7 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID inte
 	case FieldTypeBelongsTo:
 		_, _, err := r.Update(ctx, &UpdateOptions{
 			FilterByTk: sourceID,
-			Values:     map[string]interface{}{f.Name(): nil},
+			Values:     map[string]any{f.Name(): nil},
 		})
 		return err
 	case FieldTypeHasMany, FieldTypeHasOne:
@@ -594,7 +594,7 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID inte
 		for _, id := range ids {
 			_, _, err := target.Repository().Update(ctx, &UpdateOptions{
 				FilterByTk: id,
-				Values:     map[string]interface{}{ro.ForeignKey: nil},
+				Values:     map[string]any{ro.ForeignKey: nil},
 			})
 			if err != nil {
 				return err

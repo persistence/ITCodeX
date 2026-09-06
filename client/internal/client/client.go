@@ -35,7 +35,7 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, params map[string]string) (interface{}, error) {
+func (c *Client) doRequest(ctx context.Context, method, path string, body any, params map[string]string) (any, error) {
 	reqURL, err := url.Parse(c.BaseURL + path)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
@@ -77,7 +77,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var apiResp map[string]interface{}
+	var apiResp map[string]any
 
 	if len(respBody) > 0 {
 		dec := json.NewDecoder(bytes.NewReader(respBody))
@@ -93,10 +93,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		}
 	}
 	if apiResp == nil {
-		apiResp = make(map[string]interface{})
+		apiResp = make(map[string]any)
 	}
 
-	apiResp = normalizeNumbers(apiResp).(map[string]interface{})
+	apiResp = normalizeNumbers(apiResp).(map[string]any)
 
 	if resp.StatusCode >= 400 {
 		apiErr := &APIError{
@@ -123,7 +123,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	return apiResp, nil
 }
 
-func toString(v interface{}) string {
+func toString(v any) string {
 	if v == nil {
 		return ""
 	}
@@ -133,7 +133,7 @@ func toString(v interface{}) string {
 	return fmt.Sprintf("%v", v)
 }
 
-func asInt64(v interface{}) int64 {
+func asInt64(v any) int64 {
 	switch n := v.(type) {
 	case int64:
 		return n
@@ -154,7 +154,7 @@ func asInt64(v interface{}) int64 {
 }
 
 // normalizeNumbers converts json.Number values to int64 or float64 for ease of use.
-func normalizeNumbers(v interface{}) interface{} {
+func normalizeNumbers(v any) any {
 	switch val := v.(type) {
 	case json.Number:
 		if i, err := val.Int64(); err == nil {
@@ -164,12 +164,12 @@ func normalizeNumbers(v interface{}) interface{} {
 			return f
 		}
 		return val.String()
-	case map[string]interface{}:
+	case map[string]any:
 		for k, vv := range val {
 			val[k] = normalizeNumbers(vv)
 		}
 		return val
-	case []interface{}:
+	case []any:
 		for i, vv := range val {
 			val[i] = normalizeNumbers(vv)
 		}
@@ -179,18 +179,18 @@ func normalizeNumbers(v interface{}) interface{} {
 	}
 }
 
-func (c *Client) get(ctx context.Context, path string, params map[string]string) (interface{}, error) {
+func (c *Client) get(ctx context.Context, path string, params map[string]string) (any, error) {
 	return c.doRequest(ctx, http.MethodGet, path, nil, params)
 }
 
-func (c *Client) post(ctx context.Context, path string, body interface{}) (interface{}, error) {
+func (c *Client) post(ctx context.Context, path string, body any) (any, error) {
 	return c.doRequest(ctx, http.MethodPost, path, body, nil)
 }
 
-func (c *Client) put(ctx context.Context, path string, body interface{}) (interface{}, error) {
+func (c *Client) put(ctx context.Context, path string, body any) (any, error) {
 	return c.doRequest(ctx, http.MethodPut, path, body, nil)
 }
 
-func (c *Client) del(ctx context.Context, path string, params map[string]string) (interface{}, error) {
+func (c *Client) del(ctx context.Context, path string, params map[string]string) (any, error) {
 	return c.doRequest(ctx, http.MethodDelete, path, nil, params)
 }

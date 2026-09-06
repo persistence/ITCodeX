@@ -302,7 +302,7 @@ PUT /api/meta/scripts/:id
     "collectionName": "orders",
     "name": "自动生成订单号",
     "hookPoint": "beforeCreate",
-    "content": "package main\n\nimport (\n    \"context\"\n    \"fmt\"\n    \"itcodex/utils\"\n)\n\nfunc BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {\n    now := utils.Now()\n    datePart := utils.FormatTime(now, \"20060102\")\n    seq := utils.NanoID(6)\n    data[\"orderNo\"] = fmt.Sprintf(\"ORD-%s-%s\", datePart, seq)\n    return data, nil\n}",
+    "content": "package main\n\nimport (\n    \"context\"\n    \"fmt\"\n    \"itcodex/utils\"\n)\n\nfunc BeforeCreate(ctx context.Context, data map[string]any) (map[string]any, error) {\n    now := utils.Now()\n    datePart := utils.FormatTime(now, \"20060102\")\n    seq := utils.NanoID(6)\n    data[\"orderNo\"] = fmt.Sprintf(\"ORD-%s-%s\", datePart, seq)\n    return data, nil\n}",
     "priority": 0,
     "enabled": true
 }

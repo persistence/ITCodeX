@@ -148,19 +148,19 @@ type YaegiDB struct {
 // 由 Collection(ctx, name) 构造，内部绑定该 ctx（含工作单元 Tx）。
 type YaegiRepository struct {
     // 查询
-    func Find(filter map[string]interface{}, opts ...FindOption) ([]map[string]interface{}, error)
-    func FindOne(filter map[string]interface{}) (map[string]interface{}, error)
-    func FindByID(id interface{}) (map[string]interface{}, error)
-    func Count(filter map[string]interface{}) (int, error)
-    func FindAndCount(filter map[string]interface{}, opts ...FindOption) ([]map[string]interface{}, int, error)
+    func Find(filter map[string]any, opts ...FindOption) ([]map[string]any, error)
+    func FindOne(filter map[string]any) (map[string]any, error)
+    func FindByID(id any) (map[string]any, error)
+    func Count(filter map[string]any) (int, error)
+    func FindAndCount(filter map[string]any, opts ...FindOption) ([]map[string]any, int, error)
 
     // 写入
-    func Create(values map[string]interface{}) (map[string]interface{}, error)
-    func CreateMany(records []map[string]interface{}) ([]map[string]interface{}, error)
-    func Update(filter map[string]interface{}, values map[string]interface{}) (int, error)
-    func UpdateByID(id interface{}, values map[string]interface{}) (map[string]interface{}, error)
-    func Delete(filter map[string]interface{}) (int, error)
-    func DeleteByID(id interface{}) error
+    func Create(values map[string]any) (map[string]any, error)
+    func CreateMany(records []map[string]any) ([]map[string]any, error)
+    func Update(filter map[string]any, values map[string]any) (int, error)
+    func UpdateByID(id any, values map[string]any) (map[string]any, error)
+    func Delete(filter map[string]any) (int, error)
+    func DeleteByID(id any) error
 
     // 事务：已在 CRUD 工作单元内时为加入（join），禁止再 Begin。
     // 仅自定义 API、或钩子外的独立脚本需要自己开事务时使用。
@@ -203,8 +203,8 @@ type YaegiHTTPContext struct {
 
 type YaegiRequest struct {
     func Body() []byte
-    func BindJSON(v interface{}) error
-    func GetJSON(key string) interface{}
+    func BindJSON(v any) error
+    func GetJSON(key string) any
     func GetString(key string, def ...string) string
     func GetInt(key string, def ...int) int
     func GetForm(key string) string
@@ -212,8 +212,8 @@ type YaegiRequest struct {
 }
 
 type YaegiResponse struct {
-    func JSON(status int, data interface{})
-    func JSONSuccess(data interface{})
+    func JSON(status int, data any)
+    func JSONSuccess(data any)
     func JSONError(status int, msg string)
     func JSONValidationError(errors map[string][]string)
     func String(status int, text string)
@@ -245,9 +245,9 @@ func Join(elems []string, sep string) string
 func Replace(s, old, new string, n int) string
 
 // JSON工具
-func ToJSON(v interface{}) (string, error)
-func FromJSON(s string, v interface{}) error
-func ToMap(v interface{}) map[string]interface{}
+func ToJSON(v any) (string, error)
+func FromJSON(s string, v any) error
+func ToMap(v any) map[string]any
 
 // 时间工具
 func Now() time.Time
@@ -266,9 +266,9 @@ func MD5(s string) string
 func SHA256(s string) string
 
 // 日志
-func LogInfo(v ...interface{})
-func LogWarn(v ...interface{})
-func LogError(v ...interface{})
+func LogInfo(v ...any)
+func LogWarn(v ...any)
+func LogError(v ...any)
 ```
 
 ```go
@@ -276,7 +276,7 @@ func LogError(v ...interface{})
 package validation
 
 // CEL表达式校验（在脚本中可直接使用）
-func ValidateCEL(data map[string]interface{}, expression string) (bool, error)
+func ValidateCEL(data map[string]any, expression string) (bool, error)
 func NewValidationError(msg string) error
 func NewFieldValidationError(field, msg string) error
 ```
@@ -291,32 +291,32 @@ Yaegi 脚本需要导出特定签名的函数作为钩子：
 // BeforeCreateHook 创建前钩子
 // 返回 error 会终止创建并返回错误
 // 返回 modified data 可修改要创建的数据
-func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
+func BeforeCreate(ctx context.Context, data map[string]any) (map[string]any, error)
 
 // AfterCreateHook 创建后钩子（仍在事务内，可继续写当前库）
-func AfterCreate(ctx context.Context, result map[string]interface{}) error
+func AfterCreate(ctx context.Context, result map[string]any) error
 
 // AfterCommitHook 事务提交成功后钩子（禁止再写当前工作单元；可发通知）
-func AfterCommit(ctx context.Context, result map[string]interface{}) error
+func AfterCommit(ctx context.Context, result map[string]any) error
 
 // BeforeUpdateHook 更新前钩子
-func BeforeUpdate(ctx context.Context, oldData, newData map[string]interface{}) (map[string]interface{}, error)
+func BeforeUpdate(ctx context.Context, oldData, newData map[string]any) (map[string]any, error)
 
 // AfterUpdateHook 更新后钩子
-func AfterUpdate(ctx context.Context, result map[string]interface{}) error
+func AfterUpdate(ctx context.Context, result map[string]any) error
 
 // BeforeDeleteHook 删除前钩子
 // 返回 error 会终止删除
-func BeforeDelete(ctx context.Context, data map[string]interface{}) error
+func BeforeDelete(ctx context.Context, data map[string]any) error
 
 // AfterDeleteHook 删除后钩子
-func AfterDelete(ctx context.Context, data map[string]interface{}) error
+func AfterDelete(ctx context.Context, data map[string]any) error
 
 // BeforeValidateHook 校验前钩子
-func BeforeValidate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
+func BeforeValidate(ctx context.Context, data map[string]any) (map[string]any, error)
 
 // AfterValidateHook 校验后钩子
-func AfterValidate(ctx context.Context, data map[string]interface{}) error
+func AfterValidate(ctx context.Context, data map[string]any) error
 
 // CustomAPIHandler 自定义API处理函数
 func Handle(ctx *context.YaegiHTTPContext)
@@ -385,17 +385,17 @@ func (r *GenericRepository) execDB(ctx context.Context) DB {
 #### 4.3.4 Yaegi 必须遵守
 
 ```go
-func AfterCreate(ctx context.Context, result map[string]interface{}) error {
+func AfterCreate(ctx context.Context, result map[string]any) error {
     // 正确：改当前库走同一事务
     items := metadata.DB.Collection(ctx, "order_items")
-    _, err := items.Create(map[string]interface{}{
+    _, err := items.Create(map[string]any{
         "orderId": result["id"],
         "sku":     "welcome",
     })
     return err // 非 nil → 订单主表与本行一起回滚
 }
 
-func AfterCommit(ctx context.Context, result map[string]interface{}) error {
+func AfterCommit(ctx context.Context, result map[string]any) error {
     // 正确：通知类副作用
     utils.LogInfo("order committed", result["id"])
     return nil
@@ -441,7 +441,7 @@ type Script struct {
     HTTPMethod    string            `json:"httpMethod,omitempty"`  // GET/POST/PUT/DELETE
     Enabled       bool              `json:"enabled"`
     Priority      int               `json:"priority"` // 执行顺序，越小越先执行
-    Options       map[string]interface{} `json:"options,omitempty"`
+    Options       map[string]any `json:"options,omitempty"`
     CreatedAt     *gtime.Time       `json:"createdAt"`
     UpdatedAt     *gtime.Time       `json:"updatedAt"`
 
@@ -593,7 +593,7 @@ var DB = metadata.DB
 }
 
 // ExecuteHook 执行钩子
-func (m *YaegiManager) ExecuteHook(ctx context.Context, collection, hook string, data interface{}) (interface{}, error) {
+func (m *YaegiManager) ExecuteHook(ctx context.Context, collection, hook string, data any) (any, error) {
     m.mu.RLock()
     key := collection + ":" + hook
     scripts := m.hooks[key]
@@ -604,7 +604,7 @@ func (m *YaegiManager) ExecuteHook(ctx context.Context, collection, hook string,
         return scripts[i].Priority < scripts[j].Priority
     })
 
-    var result interface{} = data
+    var result any = data
     for _, script := range scripts {
         if !script.Enabled {
             continue
@@ -650,13 +650,13 @@ func YaegiCRUDMiddleware(db *metadata.Database) func(r *ghttp.Request) {
         hookPoint := determineHookPoint(r)
 
         // 读取请求body中的数据
-        var data map[string]interface{}
+        var data map[string]any
         if r.IsPost() || r.IsPut() || r.IsPatch() {
             _ = r.GetJson(&data)
         }
 
         // 如果是更新/删除，先查询旧数据
-        var oldData map[string]interface{}
+        var oldData map[string]any
         if hookPoint == "beforeUpdate" || hookPoint == "beforeDelete" {
             id := r.GetRouterString("id")
             if id != "" {
@@ -668,9 +668,9 @@ func YaegiCRUDMiddleware(db *metadata.Database) func(r *ghttp.Request) {
         // 执行 before 钩子
         if strings.HasPrefix(hookPoint, "before") {
             ctx := r.Context()
-            var input interface{}
+            var input any
             if hookPoint == "beforeUpdate" {
-                input = []map[string]interface{}{oldData, data}
+                input = []map[string]any{oldData, data}
             } else if hookPoint == "beforeDelete" {
                 input = oldData
             } else {
@@ -687,7 +687,7 @@ func YaegiCRUDMiddleware(db *metadata.Database) func(r *ghttp.Request) {
             }
 
             // 如果钩子修改了data，替换回去
-            if modified, ok := result.(map[string]interface{}); ok && hookPoint != "beforeDelete" {
+            if modified, ok := result.(map[string]any); ok && hookPoint != "beforeDelete" {
                 // 将修改后的数据重新设置到请求中
                 // ...
             }
@@ -757,7 +757,7 @@ import (
 )
 
 // BeforeCreate 创建订单前自动生成订单号
-func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+func BeforeCreate(ctx context.Context, data map[string]any) (map[string]any, error) {
     // 生成订单号: ORD-yyyyMMdd-xxxxx
     now := utils.Now()
     datePart := utils.FormatTime(now, "20060102")
@@ -775,9 +775,9 @@ func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]
 }
 
 // AfterCreate 仍在事务内：可写当前库（如订单明细）
-func AfterCreate(ctx context.Context, result map[string]interface{}) error {
+func AfterCreate(ctx context.Context, result map[string]any) error {
     items := metadata.DB.Collection(ctx, "order_items")
-    _, err := items.Create(map[string]interface{}{
+    _, err := items.Create(map[string]any{
         "orderId": result["id"],
         "title":   "bootstrap",
     })
@@ -785,13 +785,13 @@ func AfterCreate(ctx context.Context, result map[string]interface{}) error {
 }
 
 // AfterCommit 事务提交后再记日志 / 发通知
-func AfterCommit(ctx context.Context, result map[string]interface{}) error {
+func AfterCommit(ctx context.Context, result map[string]any) error {
     utils.LogInfo("新订单已提交:", result["id"], result["orderNo"])
     return nil
 }
 
 // BeforeUpdate 更新前检查
-func BeforeUpdate(ctx context.Context, oldData, newData map[string]interface{}) (map[string]interface{}, error) {
+func BeforeUpdate(ctx context.Context, oldData, newData map[string]any) (map[string]any, error) {
     // 已完成的订单不能修改金额
     if oldData["status"] == "completed" {
         if _, ok := newData["amount"]; ok {
@@ -851,7 +851,7 @@ func Handle(ctx *context.YaegiHTTPContext) {
 
     // 更新密码
     hashed, _ := utils.HashPassword(req.NewPassword)
-    _, err = users.UpdateByID(userID, map[string]interface{}{
+    _, err = users.UpdateByID(userID, map[string]any{
         "password": hashed,
     })
     if err != nil {
@@ -859,7 +859,7 @@ func Handle(ctx *context.YaegiHTTPContext) {
         return
     }
 
-    ctx.Response.JSONSuccess(map[string]interface{}{
+    ctx.Response.JSONSuccess(map[string]any{
         "message": "密码修改成功",
     })
 }
@@ -879,7 +879,7 @@ import (
 )
 
 // BeforeValidate 校验开始日期和结束日期
-func BeforeValidate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+func BeforeValidate(ctx context.Context, data map[string]any) (map[string]any, error) {
     // 使用CEL表达式校验
     ok, err := validation.ValidateCEL(data, `
         data.startDate == null ||

@@ -8,12 +8,12 @@ import (
 )
 
 type Record struct {
-	data map[string]interface{}
+	data map[string]any
 }
 
-func NewRecord(data map[string]interface{}) *Record {
+func NewRecord(data map[string]any) *Record {
 	if data == nil {
-		data = make(map[string]interface{})
+		data = make(map[string]any)
 	}
 	return &Record{
 		data: data,
@@ -24,23 +24,23 @@ func (r *Record) Id() int64 {
 	return cast.ToInt64(r.data[DefaultPrimaryKey])
 }
 
-func (r *Record) Get(key string) interface{} {
+func (r *Record) Get(key string) any {
 	if r.data == nil {
 		return nil
 	}
 	return r.data[key]
 }
 
-func (r *Record) Set(key string, val interface{}) {
+func (r *Record) Set(key string, val any) {
 	if r.data == nil {
-		r.data = make(map[string]interface{})
+		r.data = make(map[string]any)
 	}
 	r.data[key] = val
 }
 
-func (r *Record) Data() map[string]interface{} {
+func (r *Record) Data() map[string]any {
 	if r.data == nil {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 	return r.data
 }

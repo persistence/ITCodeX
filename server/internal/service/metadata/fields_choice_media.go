@@ -11,7 +11,7 @@ type RadioField struct {
 	SelectField
 }
 
-func NewRadioField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewRadioField(coll *Collection, opts map[string]any) (Field, error) {
 	return &RadioField{
 		SelectField: SelectField{BaseField: newBaseField(string(FieldTypeRadio), DataTypeVarchar, opts)},
 	}, nil
@@ -22,7 +22,7 @@ type MultiSelectField struct {
 	BaseField
 }
 
-func (f *MultiSelectField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *MultiSelectField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -33,7 +33,7 @@ func (f *MultiSelectField) ToStoreValue(value interface{}) (interface{}, error) 
 	return string(b), nil
 }
 
-func (f *MultiSelectField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *MultiSelectField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -46,27 +46,27 @@ func (f *MultiSelectField) FromStoreValue(value interface{}) (interface{}, error
 	default:
 		return value, nil
 	}
-	var out interface{}
+	var out any
 	if err := json.Unmarshal([]byte(s), &out); err != nil {
 		return s, nil
 	}
 	return out, nil
 }
 
-func (f *MultiSelectField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *MultiSelectField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
 	return nil
 }
 
-func NewMultiSelectField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewMultiSelectField(coll *Collection, opts map[string]any) (Field, error) {
 	return &MultiSelectField{
 		BaseField: newBaseField(string(FieldTypeMultiSelect), DataTypeJSON, opts),
 	}, nil
 }
 
-func NewCheckboxGroupField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewCheckboxGroupField(coll *Collection, opts map[string]any) (Field, error) {
 	f, err := NewMultiSelectField(coll, opts)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ type MarkdownField struct {
 	BaseField
 }
 
-func NewMarkdownField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewMarkdownField(coll *Collection, opts map[string]any) (Field, error) {
 	return &MarkdownField{
 		BaseField: newBaseField(string(FieldTypeMarkdown), DataTypeLongText, opts),
 	}, nil
@@ -90,7 +90,7 @@ type RichTextField struct {
 	BaseField
 }
 
-func NewRichTextField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewRichTextField(coll *Collection, opts map[string]any) (Field, error) {
 	return &RichTextField{
 		BaseField: newBaseField(string(FieldTypeRichText), DataTypeLongText, opts),
 	}, nil
@@ -100,7 +100,7 @@ type AttachmentURLField struct {
 	BaseField
 }
 
-func NewAttachmentURLField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewAttachmentURLField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeAttachmentUrl), DataTypeVarchar, opts)
 	if bf.length <= 0 {
 		bf.length = 2048
@@ -112,7 +112,7 @@ type TimeField struct {
 	BaseField
 }
 
-func NewTimeField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewTimeField(coll *Collection, opts map[string]any) (Field, error) {
 	return &TimeField{
 		BaseField: newBaseField(string(FieldTypeTime), DataTypeTime, opts),
 	}, nil
@@ -122,7 +122,7 @@ type UnixTimestampField struct {
 	BaseField
 }
 
-func NewUnixTimestampField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewUnixTimestampField(coll *Collection, opts map[string]any) (Field, error) {
 	return &UnixTimestampField{
 		BaseField: newBaseField(string(FieldTypeUnixTimestamp), DataTypeBigInt, opts),
 	}, nil
@@ -132,7 +132,7 @@ type PercentField struct {
 	BaseField
 }
 
-func (f *PercentField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *PercentField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (f *PercentField) ValidateValue(ctx context.Context, value interface{}) err
 	return nil
 }
 
-func NewPercentField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewPercentField(coll *Collection, opts map[string]any) (Field, error) {
 	return &PercentField{
 		BaseField: newBaseField(string(FieldTypePercent), DataTypeFloat, opts),
 	}, nil
@@ -152,7 +152,7 @@ type ColorField struct {
 	BaseField
 }
 
-func (f *ColorField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *ColorField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (f *ColorField) ValidateValue(ctx context.Context, value interface{}) error
 	return nil
 }
 
-func NewColorField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewColorField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypeColor), DataTypeVarchar, opts)
 	if bf.length <= 0 {
 		bf.length = 32

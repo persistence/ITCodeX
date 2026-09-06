@@ -30,7 +30,7 @@ func NewCELValidator() *CELValidator {
 	}
 }
 
-func (v *CELValidator) ValidateRecord(ctx context.Context, coll *Collection, data map[string]interface{}, oldData map[string]interface{}, isUpdate bool) error {
+func (v *CELValidator) ValidateRecord(ctx context.Context, coll *Collection, data map[string]any, oldData map[string]any, isUpdate bool) error {
 	validationErr := NewValidationError()
 
 	for _, field := range coll.Fields() {
@@ -67,7 +67,7 @@ func (v *CELValidator) ValidateRecord(ctx context.Context, coll *Collection, dat
 					validationErr.AddFieldError(fieldName, fmt.Sprintf("CEL规则编译失败: %v", err))
 					continue
 				}
-				vars := map[string]interface{}{
+				vars := map[string]any{
 					"data":    data,
 					"oldData": oldData,
 				}
@@ -95,7 +95,7 @@ func (v *CELValidator) ValidateRecord(ctx context.Context, coll *Collection, dat
 				validationErr.AddTableError(fmt.Sprintf("表级规则[%s]编译失败: %v", rule.Name, err))
 				continue
 			}
-			vars := map[string]interface{}{
+			vars := map[string]any{
 				"data":    data,
 				"oldData": oldData,
 			}
@@ -150,10 +150,10 @@ func (v *CELValidator) compile(expr string) (*cel.Program, error) {
 	return &prog, nil
 }
 
-func (v *CELValidator) evalProgram(prog *cel.Program, vars map[string]interface{}) (ref.Val, error) {
-	celVars := make(map[string]interface{})
+func (v *CELValidator) evalProgram(prog *cel.Program, vars map[string]any) (ref.Val, error) {
+	celVars := make(map[string]any)
 	for k, val := range vars {
-		if m, ok := val.(map[string]interface{}); ok && m != nil {
+		if m, ok := val.(map[string]any); ok && m != nil {
 			celVars[k] = types.NewStringInterfaceMap(types.DefaultTypeAdapter, m)
 		} else {
 			celVars[k] = val
@@ -174,7 +174,7 @@ func (v *CELValidator) ClearCache() {
 	v.cache = make(map[string]*cel.Program)
 }
 
-func fieldCELRules(opts map[string]interface{}) []CELRule {
+func fieldCELRules(opts map[string]any) []CELRule {
 	if opts == nil {
 		return nil
 	}
@@ -185,7 +185,7 @@ func fieldCELRules(opts map[string]interface{}) []CELRule {
 	if rules, ok := raw.([]CELRule); ok {
 		return rules
 	}
-	items, ok := raw.([]interface{})
+	items, ok := raw.([]any)
 	if !ok {
 		return nil
 	}
@@ -194,7 +194,7 @@ func fieldCELRules(opts map[string]interface{}) []CELRule {
 		switch r := item.(type) {
 		case CELRule:
 			rules = append(rules, r)
-		case map[string]interface{}:
+		case map[string]any:
 			expr, _ := r["expression"].(string)
 			errMsg, _ := r["errorMessage"].(string)
 			name, _ := r["name"].(string)
@@ -206,13 +206,13 @@ func fieldCELRules(opts map[string]interface{}) []CELRule {
 
 // checkUnique verifies that the given field value does not already exist in the collection.
 // When updating, oldData is used to exclude the current record from the uniqueness check.
-func checkUnique(ctx context.Context, coll *Collection, fieldName string, value interface{}, oldData map[string]interface{}) error {
+func checkUnique(ctx context.Context, coll *Collection, fieldName string, value any, oldData map[string]any) error {
 	if coll.Db() == nil || coll.Db().db == nil {
 		return nil
 	}
 
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE %s = ?`, quoteIdent(coll.TableName()), quoteIdent(fieldName))
-	args := []interface{}{value}
+	args := []any{value}
 
 	// when updating, exclude self
 	if oldData != nil {

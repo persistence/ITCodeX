@@ -149,7 +149,7 @@ Body 支持 `{ "id": 1 }`、`[{ "id": 1 }, { "id": 2 }]`、或纯 ID 数组（�
 type CreateFieldInput struct {
     Name, DisplayName, Type string
     IsRequired, IsUnique, IsIndexed bool
-    Options map[string]interface{}
+    Options map[string]any
     // 关系 / 增强
     Target, ForeignKey, SourceKey, Through, OtherKey, TargetKey string
     Expression, Pattern string
@@ -280,8 +280,8 @@ func TestExample_Relation(t *testing.T) {
         client.CreateFieldInput{Name: "title", Type: "string", IsRequired: true},
         client.CreateFieldInput{Name: "author_id", Type: "belongsTo", Target: "authors_e2e", ForeignKey: "author_id"},
     )
-    author := s.createTestRecord(t, "authors_e2e", map[string]interface{}{"name": "Alice"})
-    post := s.createTestRecord(t, "posts_e2e", map[string]interface{}{
+    author := s.createTestRecord(t, "authors_e2e", map[string]any{"name": "Alice"})
+    post := s.createTestRecord(t, "posts_e2e", map[string]any{
         "title": "Hello", "author_id": author["id"],
     })
     got, err := s.client.FindOne(s.ctx, "posts_e2e", fmt.Sprint(post["id"]), &client.FindOneOptions{

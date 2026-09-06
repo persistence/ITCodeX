@@ -574,14 +574,14 @@ type TableCELRule struct {
 package validation
 
 // ValidateData 执行完整校验流程
-func (v *Validator) ValidateData(ctx context.Context, collection *metadata.Collection, data map[string]interface{}, oldData map[string]interface{}, action string) (*ValidationResult, error) {
+func (v *Validator) ValidateData(ctx context.Context, collection *metadata.Collection, data map[string]any, oldData map[string]any, action string) (*ValidationResult, error) {
     result := &ValidationResult{
         FieldErrors:  make(map[string][]string),
         TableErrors:  []string{},
     }
 
     // 构建激活变量
-    activation := map[string]interface{}{
+    activation := map[string]any{
         "data":    data,
         "oldData": oldData,
         "action":  action,

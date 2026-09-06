@@ -17,7 +17,7 @@ type YaegiRequest struct {
 	Method string
 }
 
-func (r *YaegiRequest) BindJSON(v interface{}) error {
+func (r *YaegiRequest) BindJSON(v any) error {
 	if r.Body == nil {
 		return nil
 	}
@@ -42,19 +42,19 @@ type YaegiResponse struct {
 	Status int
 }
 
-func (r *YaegiResponse) JSON(code int, v interface{}) {
+func (r *YaegiResponse) JSON(code int, v any) {
 	r.Raw.Header().Set("Content-Type", "application/json; charset=utf-8")
 	r.Status = code
 	r.Raw.WriteHeader(code)
 	json.NewEncoder(r.Raw).Encode(v)
 }
 
-func (r *YaegiResponse) JSONSuccess(data interface{}) {
-	r.JSON(200, map[string]interface{}{"code": 0, "data": data})
+func (r *YaegiResponse) JSONSuccess(data any) {
+	r.JSON(200, map[string]any{"code": 0, "data": data})
 }
 
 func (r *YaegiResponse) JSONError(code int, msg string) {
-	r.JSON(code, map[string]interface{}{"code": code, "message": msg})
+	r.JSON(code, map[string]any{"code": code, "message": msg})
 }
 
 func (r *YaegiResponse) WriteString(s string) {
@@ -67,7 +67,7 @@ type YaegiHTTPContext struct {
 	Params   map[string]string
 	Query    url.Values
 	Headers  http.Header
-	Locals   map[string]interface{}
+	Locals   map[string]any
 }
 
 func NewYaegiHTTPContext(w http.ResponseWriter, req *http.Request, params map[string]string) *YaegiHTTPContext {
@@ -89,7 +89,7 @@ func NewYaegiHTTPContext(w http.ResponseWriter, req *http.Request, params map[st
 		Params:  params,
 		Query:   req.URL.Query(),
 		Headers: req.Header,
-		Locals:  make(map[string]interface{}),
+		Locals:  make(map[string]any),
 	}
 }
 

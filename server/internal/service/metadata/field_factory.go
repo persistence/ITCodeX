@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-type FieldFactory func(coll *Collection, opts map[string]interface{}) (Field, error)
+type FieldFactory func(coll *Collection, opts map[string]any) (Field, error)
 
 var defaultFieldFactories = map[FieldType]FieldFactory{
 	FieldTypeString:             wrapFactory(NewStringField),
@@ -49,7 +49,7 @@ var defaultFieldFactories = map[FieldType]FieldFactory{
 	FieldTypeNanoID:             wrapFactory(NewNanoIDField),
 }
 
-func wrapFactory(f func(coll *Collection, opts map[string]interface{}) (Field, error)) FieldFactory {
+func wrapFactory(f func(coll *Collection, opts map[string]any) (Field, error)) FieldFactory {
 	return f
 }
 
@@ -57,7 +57,7 @@ func RegisterFieldFactory(fieldType FieldType, factory FieldFactory) {
 	defaultFieldFactories[fieldType] = factory
 }
 
-func NewField(coll *Collection, fieldType FieldType, opts map[string]interface{}) (Field, error) {
+func NewField(coll *Collection, fieldType FieldType, opts map[string]any) (Field, error) {
 	factory, ok := defaultFieldFactories[fieldType]
 	if !ok {
 		return nil, fmt.Errorf("不支持的字段类型: %s", fieldType)

@@ -13,7 +13,7 @@ type DatetimeField struct {
 	BaseField
 }
 
-func (f *DatetimeField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *DatetimeField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -26,7 +26,7 @@ func (f *DatetimeField) ToStoreValue(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func (f *DatetimeField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *DatetimeField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -39,7 +39,7 @@ func (f *DatetimeField) FromStoreValue(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func NewDatetimeField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewDatetimeField(coll *Collection, opts map[string]any) (Field, error) {
 	return &DatetimeField{
 		BaseField: newBaseField(string(FieldTypeDateTime), DataTypeDateTime, opts),
 	}, nil
@@ -49,7 +49,7 @@ type DateField struct {
 	BaseField
 }
 
-func (f *DateField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *DateField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -62,7 +62,7 @@ func (f *DateField) ToStoreValue(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func (f *DateField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *DateField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -75,7 +75,7 @@ func (f *DateField) FromStoreValue(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func NewDateField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewDateField(coll *Collection, opts map[string]any) (Field, error) {
 	return &DateField{
 		BaseField: newBaseField(string(FieldTypeDate), DataTypeDate, opts),
 	}, nil
@@ -85,14 +85,14 @@ type SelectField struct {
 	BaseField
 }
 
-func (f *SelectField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *SelectField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
 	if value == nil {
 		return nil
 	}
-	opts, ok := f.options["options"].([]interface{})
+	opts, ok := f.options["options"].([]any)
 	if !ok || len(opts) == 0 {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (f *SelectField) ValidateValue(ctx context.Context, value interface{}) erro
 		if fmt.Sprintf("%v", opt) == strVal {
 			return nil
 		}
-		if m, ok := opt.(map[string]interface{}); ok {
+		if m, ok := opt.(map[string]any); ok {
 			if v, ok := m["value"]; ok && fmt.Sprintf("%v", v) == strVal {
 				return nil
 			}
@@ -110,7 +110,7 @@ func (f *SelectField) ValidateValue(ctx context.Context, value interface{}) erro
 	return fmt.Errorf("字段 %s 的值 %v 不在可选范围内", f.name, value)
 }
 
-func NewSelectField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewSelectField(coll *Collection, opts map[string]any) (Field, error) {
 	return &SelectField{
 		BaseField: newBaseField(string(FieldTypeSelect), DataTypeVarchar, opts),
 	}, nil
@@ -120,7 +120,7 @@ type EmailField struct {
 	BaseField
 }
 
-func (f *EmailField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *EmailField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (f *EmailField) ValidateValue(ctx context.Context, value interface{}) error
 	return nil
 }
 
-func NewEmailField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewEmailField(coll *Collection, opts map[string]any) (Field, error) {
 	return &EmailField{
 		BaseField: newBaseField(string(FieldTypeEmail), DataTypeVarchar, opts),
 	}, nil
@@ -147,7 +147,7 @@ type URLField struct {
 	BaseField
 }
 
-func (f *URLField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *URLField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (f *URLField) ValidateValue(ctx context.Context, value interface{}) error {
 	return nil
 }
 
-func NewURLField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewURLField(coll *Collection, opts map[string]any) (Field, error) {
 	return &URLField{
 		BaseField: newBaseField(string(FieldTypeUrl), DataTypeVarchar, opts),
 	}, nil
@@ -174,14 +174,14 @@ type PhoneField struct {
 	BaseField
 }
 
-func (f *PhoneField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *PhoneField) ValidateValue(ctx context.Context, value any) error {
 	if err := f.BaseField.ValidateValue(ctx, value); err != nil {
 		return err
 	}
 	return nil
 }
 
-func NewPhoneField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewPhoneField(coll *Collection, opts map[string]any) (Field, error) {
 	return &PhoneField{
 		BaseField: newBaseField(string(FieldTypePhone), DataTypeVarchar, opts),
 	}, nil
@@ -191,7 +191,7 @@ type JSONField struct {
 	BaseField
 }
 
-func (f *JSONField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *JSONField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -207,7 +207,7 @@ func (f *JSONField) ToStoreValue(value interface{}) (interface{}, error) {
 	}
 }
 
-func NewJSONField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewJSONField(coll *Collection, opts map[string]any) (Field, error) {
 	return &JSONField{
 		BaseField: newBaseField(string(FieldTypeJSON), DataTypeJSON, opts),
 	}, nil

@@ -131,13 +131,13 @@ func TestFieldValidation_MinMaxPattern(t *testing.T) {
 	a.NoError(err)
 	repo := coll.Repository()
 
-	_, err = repo.Create(ctx, &CreateOptions{Values: map[string]interface{}{"score": -1, "code": "ABC"}})
+	_, err = repo.Create(ctx, &CreateOptions{Values: map[string]any{"score": -1, "code": "ABC"}})
 	a.Error(err)
 
-	_, err = repo.Create(ctx, &CreateOptions{Values: map[string]interface{}{"score": 1, "code": "abc"}})
+	_, err = repo.Create(ctx, &CreateOptions{Values: map[string]any{"score": 1, "code": "abc"}})
 	a.Error(err)
 
-	rec, err := repo.Create(ctx, &CreateOptions{Values: map[string]interface{}{"score": 1, "code": "ABC"}})
+	rec, err := repo.Create(ctx, &CreateOptions{Values: map[string]any{"score": 1, "code": "ABC"}})
 	a.NoError(err)
 	a.NotNil(rec)
 }

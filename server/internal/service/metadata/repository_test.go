@@ -16,7 +16,7 @@ func TestRepository_Create(t *testing.T) {
 
 	t.Run("create single record succeeds", func(t *testing.T) {
 		r, err := repo.Create(ctx, &CreateOptions{
-			Values: map[string]interface{}{
+			Values: map[string]any{
 				"title":  "第一条数据",
 				"age":    25,
 				"status": "published",
@@ -30,7 +30,7 @@ func TestRepository_Create(t *testing.T) {
 
 	t.Run("required field missing returns validation error", func(t *testing.T) {
 		_, err := repo.Create(ctx, &CreateOptions{
-			Values: map[string]interface{}{"age": 20},
+			Values: map[string]any{"age": 20},
 		})
 		a.Error(err)
 		var vErr *ValidationError
@@ -63,7 +63,7 @@ func TestRepository_FindAndCount(t *testing.T) {
 
 	t.Run("find one by id", func(t *testing.T) {
 		created, err := repo.Create(ctx, &CreateOptions{
-			Values: map[string]interface{}{"title": "single", "age": 99, "status": "draft"},
+			Values: map[string]any{"title": "single", "age": 99, "status": "draft"},
 		})
 		a.NoError(err)
 		r, err := repo.FindOne(ctx, &FindOneOptions{FilterByTk: created.Id()})
@@ -84,7 +84,7 @@ func TestRepository_FindAndCount(t *testing.T) {
 
 	t.Run("find with $gt filter", func(t *testing.T) {
 		list, err := repo.Find(ctx, &FindOptions{
-			CommonOptions: CommonOptions{Filter: Filter{"age": map[string]interface{}{"$gt": 22}}},
+			CommonOptions: CommonOptions{Filter: Filter{"age": map[string]any{"$gt": 22}}},
 			PageSize:      100,
 		})
 		a.NoError(err)
@@ -132,14 +132,14 @@ func TestRepository_Update(t *testing.T) {
 	repo := coll.Repository()
 
 	created, err := repo.Create(ctx, &CreateOptions{
-		Values: map[string]interface{}{"title": "原始标题", "age": 20, "status": "draft"},
+		Values: map[string]any{"title": "原始标题", "age": 20, "status": "draft"},
 	})
 	a.NoError(err)
 
 	t.Run("update single record by id", func(t *testing.T) {
 		updated, affected, err := repo.Update(ctx, &UpdateOptions{
 			FilterByTk: created.Id(),
-			Values:     map[string]interface{}{"title": "更新后标题", "age": 30},
+			Values:     map[string]any{"title": "更新后标题", "age": 30},
 		})
 		a.NoError(err)
 		a.Equal(1, affected)
@@ -155,7 +155,7 @@ func TestRepository_Destroy(t *testing.T) {
 	coll := createBasicCollection(t, db, "crud_del")
 	repo := coll.Repository()
 
-	created, err := repo.Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "待删除"}})
+	created, err := repo.Create(ctx, &CreateOptions{Values: map[string]any{"title": "待删除"}})
 	a.NoError(err)
 
 	t.Run("destroy by id", func(t *testing.T) {
@@ -198,8 +198,8 @@ func TestRepository_Transaction(t *testing.T) {
 	t.Run("tx commit", func(t *testing.T) {
 		before, _ := repo.Count(ctx, &CountOptions{})
 		err := repo.Transaction(ctx, func(tx Repository) error {
-			tx.Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "tx1"}})
-			tx.Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "tx2"}})
+			tx.Create(ctx, &CreateOptions{Values: map[string]any{"title": "tx1"}})
+			tx.Create(ctx, &CreateOptions{Values: map[string]any{"title": "tx2"}})
 			return nil
 		})
 		a.NoError(err)
@@ -210,7 +210,7 @@ func TestRepository_Transaction(t *testing.T) {
 	t.Run("tx rollback", func(t *testing.T) {
 		before, _ := repo.Count(ctx, &CountOptions{})
 		err := repo.Transaction(ctx, func(tx Repository) error {
-			tx.Create(ctx, &CreateOptions{Values: map[string]interface{}{"title": "will_rollback"}})
+			tx.Create(ctx, &CreateOptions{Values: map[string]any{"title": "will_rollback"}})
 			return assert.AnError
 		})
 		a.Error(err)
@@ -220,7 +220,7 @@ func TestRepository_Transaction(t *testing.T) {
 }
 
 // forceInt coerces MySQL numeric values (int64/int/float64) to int for comparisons.
-func forceInt(v interface{}) int {
+func forceInt(v any) int {
 	switch x := v.(type) {
 	case int:
 		return x

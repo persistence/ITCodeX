@@ -16,13 +16,13 @@ type RelationOptions struct {
 	TargetKey  string
 }
 
-func relationOptsFromMap(opts map[string]interface{}, fieldName string, typ FieldType) RelationOptions {
+func relationOptsFromMap(opts map[string]any, fieldName string, typ FieldType) RelationOptions {
 	ro := RelationOptions{
 		SourceKey: DefaultPrimaryKey,
 		TargetKey: DefaultPrimaryKey,
 	}
 	if opts == nil {
-		opts = map[string]interface{}{}
+		opts = map[string]any{}
 	}
 	if v, ok := opts["target"].(string); ok {
 		ro.Target = v
@@ -65,7 +65,7 @@ func relationOptsFromMap(opts map[string]interface{}, fieldName string, typ Fiel
 	return ro
 }
 
-func attachRelationInput(opts map[string]interface{}, input CreateFieldInput) {
+func attachRelationInput(opts map[string]any, input CreateFieldInput) {
 	if input.Target != "" {
 		opts["target"] = input.Target
 	}
@@ -148,7 +148,7 @@ func isRelationField(f Field) bool {
 func GetRelationOptions(f Field) RelationOptions {
 	name := ""
 	typ := FieldType("")
-	opts := map[string]interface{}{}
+	opts := map[string]any{}
 	if f != nil {
 		name = f.Name()
 		typ = FieldType(f.Type())
@@ -163,7 +163,7 @@ type BelongsToField struct {
 	BaseField
 }
 
-func NewBelongsToField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewBelongsToField(coll *Collection, opts map[string]any) (Field, error) {
 	name, _, _, _, _, _, _, _ := parseBaseFieldOptions(opts)
 	ro := relationOptsFromMap(opts, name, FieldTypeBelongsTo)
 	if ro.Target == "" {
@@ -192,7 +192,7 @@ type HasManyField struct {
 	BaseField
 }
 
-func NewHasManyField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewHasManyField(coll *Collection, opts map[string]any) (Field, error) {
 	name, _, _, _, _, _, _, _ := parseBaseFieldOptions(opts)
 	ro := relationOptsFromMap(opts, name, FieldTypeHasMany)
 	if ro.Target == "" {
@@ -214,7 +214,7 @@ type HasOneField struct {
 	BaseField
 }
 
-func NewHasOneField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewHasOneField(coll *Collection, opts map[string]any) (Field, error) {
 	name, _, _, _, _, _, _, _ := parseBaseFieldOptions(opts)
 	ro := relationOptsFromMap(opts, name, FieldTypeHasOne)
 	if ro.Target == "" {
@@ -236,7 +236,7 @@ type BelongsToManyField struct {
 	BaseField
 }
 
-func NewBelongsToManyField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewBelongsToManyField(coll *Collection, opts map[string]any) (Field, error) {
 	name, _, _, _, _, _, _, _ := parseBaseFieldOptions(opts)
 	ro := relationOptsFromMap(opts, name, FieldTypeBelongsToMany)
 	if ro.Target == "" {

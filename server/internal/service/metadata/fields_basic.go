@@ -10,7 +10,7 @@ type StringField struct {
 	BaseField
 }
 
-func NewStringField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewStringField(coll *Collection, opts map[string]any) (Field, error) {
 	return &StringField{
 		BaseField: newBaseField(string(FieldTypeString), DataTypeVarchar, opts),
 	}, nil
@@ -20,7 +20,7 @@ type TextField struct {
 	BaseField
 }
 
-func NewTextField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewTextField(coll *Collection, opts map[string]any) (Field, error) {
 	return &TextField{
 		BaseField: newBaseField(string(FieldTypeText), DataTypeText, opts),
 	}, nil
@@ -30,7 +30,7 @@ type IntegerField struct {
 	BaseField
 }
 
-func NewIntegerField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewIntegerField(coll *Collection, opts map[string]any) (Field, error) {
 	return &IntegerField{
 		BaseField: newBaseField(string(FieldTypeInteger), DataTypeInteger, opts),
 	}, nil
@@ -40,7 +40,7 @@ type BigintField struct {
 	BaseField
 }
 
-func NewBigintField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewBigintField(coll *Collection, opts map[string]any) (Field, error) {
 	return &BigintField{
 		BaseField: newBaseField("bigint", DataTypeBigInt, opts),
 	}, nil
@@ -50,7 +50,7 @@ type FloatField struct {
 	BaseField
 }
 
-func NewFloatField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewFloatField(coll *Collection, opts map[string]any) (Field, error) {
 	return &FloatField{
 		BaseField: newBaseField("float", DataTypeFloat, opts),
 	}, nil
@@ -60,7 +60,7 @@ type DoubleField struct {
 	BaseField
 }
 
-func NewDoubleField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewDoubleField(coll *Collection, opts map[string]any) (Field, error) {
 	return &DoubleField{
 		BaseField: newBaseField("double", DataTypeDouble, opts),
 	}, nil
@@ -70,7 +70,7 @@ type BooleanField struct {
 	BaseField
 }
 
-func NewBooleanField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewBooleanField(coll *Collection, opts map[string]any) (Field, error) {
 	return &BooleanField{
 		BaseField: newBaseField(string(FieldTypeBoolean), DataTypeBoolean, opts),
 	}, nil
@@ -80,7 +80,7 @@ type PasswordField struct {
 	BaseField
 }
 
-func (f *PasswordField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *PasswordField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -95,11 +95,11 @@ func (f *PasswordField) ToStoreValue(value interface{}) (interface{}, error) {
 	return utils.HashPassword(s), nil
 }
 
-func (f *PasswordField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *PasswordField) FromStoreValue(value any) (any, error) {
 	return f.BaseField.FromStoreValue(value)
 }
 
-func NewPasswordField(coll *Collection, opts map[string]interface{}) (Field, error) {
+func NewPasswordField(coll *Collection, opts map[string]any) (Field, error) {
 	bf := newBaseField(string(FieldTypePassword), DataTypeVarchar, opts)
 	if bf.length <= 0 {
 		bf.length = 128
@@ -107,7 +107,7 @@ func NewPasswordField(coll *Collection, opts map[string]interface{}) (Field, err
 	return &PasswordField{BaseField: bf}, nil
 }
 
-func castToString(v interface{}) string {
+func castToString(v any) string {
 	if v == nil {
 		return ""
 	}

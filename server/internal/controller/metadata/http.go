@@ -9,16 +9,16 @@ import (
 	md "itcodex/server/internal/service/metadata"
 )
 
-func writeOK(r *ghttp.Request, data interface{}) {
+func writeOK(r *ghttp.Request, data any) {
 	r.Response.WriteJson(g.Map{"code": 0, "message": "success", "data": data})
 }
 
-func writeCreated(r *ghttp.Request, data interface{}) {
+func writeCreated(r *ghttp.Request, data any) {
 	r.Response.WriteHeader(http.StatusCreated)
 	r.Response.WriteJson(g.Map{"code": 0, "message": "success", "data": data})
 }
 
-func writeFail(r *ghttp.Request, status, code int, message string, data interface{}) {
+func writeFail(r *ghttp.Request, status, code int, message string, data any) {
 	r.Response.WriteHeader(status)
 	r.Response.WriteJson(g.Map{"code": code, "message": message, "data": data})
 }

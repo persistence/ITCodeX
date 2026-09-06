@@ -46,7 +46,7 @@ func newTestDB(t *testing.T) *Database {
 // createBasicCollection creates a collection with standard fields for testing.
 func createBasicCollection(t *testing.T, db *Database, name string) *Collection {
 	t.Helper()
-	statusEnum := []interface{}{"draft", "published", "archived"}
+	statusEnum := []any{"draft", "published", "archived"}
 	coll, err := db.CreateCollection(context.Background(), CreateCollectionInput{
 		Name:         name,
 		DisplayName:  name + "_display",
@@ -54,7 +54,7 @@ func createBasicCollection(t *testing.T, db *Database, name string) *Collection 
 		Fields: []CreateFieldInput{
 			{Name: "title", Type: "string", DisplayName: "标题", IsRequired: true, Length: 200},
 			{Name: "age", Type: "integer", DisplayName: "年龄"},
-			{Name: "status", Type: "select", DisplayName: "状态", Options: map[string]interface{}{
+			{Name: "status", Type: "select", DisplayName: "状态", Options: map[string]any{
 				"enum": statusEnum,
 			}},
 		},
@@ -76,7 +76,7 @@ func seedData(t *testing.T, repo Repository, n int) []*Record {
 			status = "published"
 		}
 		r, err := repo.Create(ctx, &CreateOptions{
-			Values: map[string]interface{}{
+			Values: map[string]any{
 				"title":  "item_" + itoa(i),
 				"age":    18 + i,
 				"status": status,

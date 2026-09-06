@@ -46,20 +46,20 @@ func (r *YaegiRepository) repoCtx() context.Context {
 	return context.Background()
 }
 
-func (r *YaegiRepository) Find(filter map[string]interface{}) ([]map[string]interface{}, error) {
+func (r *YaegiRepository) Find(filter map[string]any) ([]map[string]any, error) {
 	opts := &FindOptions{CommonOptions: CommonOptions{Filter: Filter(filter)}, PageSize: MaxPageSize}
 	records, err := r.repo.Find(r.repoCtx(), opts)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]map[string]interface{}, 0, len(records))
+	out := make([]map[string]any, 0, len(records))
 	for _, rec := range records {
 		out = append(out, rec.Data())
 	}
 	return out, nil
 }
 
-func (r *YaegiRepository) FindOne(filter map[string]interface{}) (map[string]interface{}, error) {
+func (r *YaegiRepository) FindOne(filter map[string]any) (map[string]any, error) {
 	opts := &FindOneOptions{CommonOptions: CommonOptions{Filter: Filter(filter)}}
 	rec, err := r.repo.FindOne(r.repoCtx(), opts)
 	if err != nil {
@@ -68,7 +68,7 @@ func (r *YaegiRepository) FindOne(filter map[string]interface{}) (map[string]int
 	return rec.Data(), nil
 }
 
-func (r *YaegiRepository) Create(values map[string]interface{}) (map[string]interface{}, error) {
+func (r *YaegiRepository) Create(values map[string]any) (map[string]any, error) {
 	rec, err := r.repo.Create(r.repoCtx(), &CreateOptions{Values: values})
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (r *YaegiRepository) Create(values map[string]interface{}) (map[string]inte
 	return rec.Data(), nil
 }
 
-func (r *YaegiRepository) Update(id interface{}, values map[string]interface{}) (map[string]interface{}, error) {
+func (r *YaegiRepository) Update(id any, values map[string]any) (map[string]any, error) {
 	rec, _, err := r.repo.Update(r.repoCtx(), &UpdateOptions{FilterByTk: id, Values: values})
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func (r *YaegiRepository) Update(id interface{}, values map[string]interface{}) 
 	return rec.Data(), nil
 }
 
-func (r *YaegiRepository) Destroy(id interface{}) error {
+func (r *YaegiRepository) Destroy(id any) error {
 	_, err := r.repo.Destroy(r.repoCtx(), &DestroyOptions{FilterByTk: id})
 	return err
 }

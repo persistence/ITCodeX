@@ -11,7 +11,7 @@ type IDField struct {
 	BaseField
 }
 
-func (f *IDField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *IDField) ValidateValue(ctx context.Context, value any) error {
 	return nil
 }
 
@@ -19,9 +19,9 @@ func (f *IDField) DDLColumn() string {
 	return quoteIdent(f.name) + " BIGINT NOT NULL PRIMARY KEY"
 }
 
-func NewIDField(coll *Collection, opts map[string]interface{}) Field {
+func NewIDField(coll *Collection, opts map[string]any) Field {
 	if opts == nil {
-		opts = make(map[string]interface{})
+		opts = make(map[string]any)
 	}
 	if _, ok := opts["name"]; !ok {
 		opts["name"] = DefaultPrimaryKey
@@ -40,7 +40,7 @@ type CreatedAtField struct {
 	BaseField
 }
 
-func (f *CreatedAtField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *CreatedAtField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return time.Now(), nil
 	}
@@ -53,7 +53,7 @@ func (f *CreatedAtField) ToStoreValue(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func (f *CreatedAtField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *CreatedAtField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -66,13 +66,13 @@ func (f *CreatedAtField) FromStoreValue(value interface{}) (interface{}, error) 
 	return value, nil
 }
 
-func (f *CreatedAtField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *CreatedAtField) ValidateValue(ctx context.Context, value any) error {
 	return nil
 }
 
-func NewCreatedAtField(coll *Collection, opts map[string]interface{}) Field {
+func NewCreatedAtField(coll *Collection, opts map[string]any) Field {
 	if opts == nil {
-		opts = make(map[string]interface{})
+		opts = make(map[string]any)
 	}
 	if _, ok := opts["name"]; !ok {
 		opts["name"] = "created_at"
@@ -91,7 +91,7 @@ type UpdatedAtField struct {
 	BaseField
 }
 
-func (f *UpdatedAtField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *UpdatedAtField) ToStoreValue(value any) (any, error) {
 	if value == nil {
 		return time.Now(), nil
 	}
@@ -104,7 +104,7 @@ func (f *UpdatedAtField) ToStoreValue(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func (f *UpdatedAtField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *UpdatedAtField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -117,13 +117,13 @@ func (f *UpdatedAtField) FromStoreValue(value interface{}) (interface{}, error) 
 	return value, nil
 }
 
-func (f *UpdatedAtField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *UpdatedAtField) ValidateValue(ctx context.Context, value any) error {
 	return nil
 }
 
-func NewUpdatedAtField(coll *Collection, opts map[string]interface{}) Field {
+func NewUpdatedAtField(coll *Collection, opts map[string]any) Field {
 	if opts == nil {
-		opts = make(map[string]interface{})
+		opts = make(map[string]any)
 	}
 	if _, ok := opts["name"]; !ok {
 		opts["name"] = "updated_at"
@@ -138,7 +138,7 @@ func NewUpdatedAtField(coll *Collection, opts map[string]interface{}) Field {
 	}
 }
 
-type PresetFieldFactory func(coll *Collection, opts map[string]interface{}) Field
+type PresetFieldFactory func(coll *Collection, opts map[string]any) Field
 
 var PresetFieldsMap = map[string]PresetFieldFactory{
 	"id":        NewIDField,

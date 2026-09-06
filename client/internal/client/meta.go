@@ -6,17 +6,17 @@ import (
 	"fmt"
 )
 
-func toJSON(v interface{}) ([]byte, error) {
+func toJSON(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func fromJSON(data []byte, v interface{}) error {
+func fromJSON(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
 // extractData unmarshals the "data" field from a full response map into the given target.
-func extractData(resp interface{}, target interface{}) error {
-	m, ok := resp.(map[string]interface{})
+func extractData(resp any, target any) error {
+	m, ok := resp.(map[string]any)
 	if !ok {
 		return fmt.Errorf("unexpected response type: %T", resp)
 	}
@@ -28,12 +28,12 @@ func extractData(resp interface{}, target interface{}) error {
 	return json.Unmarshal(b, target)
 }
 
-func extractList(resp interface{}, target interface{}) error {
-	m, ok := resp.(map[string]interface{})
+func extractList(resp any, target any) error {
+	m, ok := resp.(map[string]any)
 	if !ok {
 		return fmt.Errorf("unexpected response type: %T", resp)
 	}
-	data, ok := m["data"].(map[string]interface{})
+	data, ok := m["data"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("unexpected data type: %T", m["data"])
 	}
@@ -191,7 +191,7 @@ func (c *Client) CreateIndex(ctx context.Context, collection string, index Index
 }
 
 func (c *Client) DeleteIndex(ctx context.Context, collection string, fields []string) error {
-	_, err := c.doRequest(ctx, "DELETE", fmt.Sprintf("/api/meta/collections/%s/indexes", collection), map[string]interface{}{
+	_, err := c.doRequest(ctx, "DELETE", fmt.Sprintf("/api/meta/collections/%s/indexes", collection), map[string]any{
 		"fields": fields,
 	}, nil)
 	return err

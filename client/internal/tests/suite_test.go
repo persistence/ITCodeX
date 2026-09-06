@@ -85,7 +85,7 @@ func (s *TestSuite) cleanupTestCollection(t *testing.T, name string) {
 	assert.NoError(t, err)
 }
 
-func (s *TestSuite) createTestRecord(t *testing.T, collection string, data map[string]interface{}) map[string]interface{} {
+func (s *TestSuite) createTestRecord(t *testing.T, collection string, data map[string]any) map[string]any {
 	t.Helper()
 	record, err := s.client.Create(s.ctx, collection, data)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func (s *TestSuite) isAPIError(err error, statusCode int) bool {
 	return apiErr.Code == statusCode
 }
 
-func asFloat64(v interface{}) float64 {
+func asFloat64(v any) float64 {
 	switch n := v.(type) {
 	case float64:
 		return n
@@ -121,7 +121,7 @@ func asFloat64(v interface{}) float64 {
 	return 0
 }
 
-func idStr(v interface{}) string {
+func idStr(v any) string {
 	return fmt.Sprintf("%v", v)
 }
 

@@ -22,8 +22,8 @@ func TestBelongsTo_Appends(t *testing.T) {
 		client.CreateFieldInput{Name: "author_id", Type: "belongsTo", Target: authors, ForeignKey: "author_id"},
 	)
 
-	author := s.createTestRecord(t, authors, map[string]interface{}{"name": "Alice"})
-	post := s.createTestRecord(t, posts, map[string]interface{}{
+	author := s.createTestRecord(t, authors, map[string]any{"name": "Alice"})
+	post := s.createTestRecord(t, posts, map[string]any{
 		"title": "Hello", "author_id": author["id"],
 	})
 
@@ -52,11 +52,11 @@ func TestHasMany_SetAssociation(t *testing.T) {
 		client.CreateFieldInput{Name: "user_id", Type: "bigint"},
 	)
 
-	user := s.createTestRecord(t, users, map[string]interface{}{"name": "u1"})
-	p1 := s.createTestRecord(t, posts, map[string]interface{}{"title": "p1"})
-	p2 := s.createTestRecord(t, posts, map[string]interface{}{"title": "p2"})
+	user := s.createTestRecord(t, users, map[string]any{"name": "u1"})
+	p1 := s.createTestRecord(t, posts, map[string]any{"title": "p1"})
+	p2 := s.createTestRecord(t, posts, map[string]any{"title": "p2"})
 
-	err := s.client.SetAssociation(s.ctx, users, idStr(user["id"]), "posts", []map[string]interface{}{
+	err := s.client.SetAssociation(s.ctx, users, idStr(user["id"]), "posts", []map[string]any{
 		{"id": idStr(p1["id"])},
 		{"id": idStr(p2["id"])},
 	})
@@ -73,9 +73,9 @@ func TestHasMany_SetAssociation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	switch v := got["posts"].(type) {
-	case []interface{}:
+	case []any:
 		assert.GreaterOrEqual(t, len(v), 2)
-	case []map[string]interface{}:
+	case []map[string]any:
 		assert.GreaterOrEqual(t, len(v), 2)
 	default:
 		t.Fatalf("unexpected posts append type %T", got["posts"])
@@ -99,11 +99,11 @@ func TestBelongsToMany_Through(t *testing.T) {
 		},
 	)
 
-	post := s.createTestRecord(t, posts, map[string]interface{}{"title": "p"})
-	tag1 := s.createTestRecord(t, tags, map[string]interface{}{"name": "t1"})
-	tag2 := s.createTestRecord(t, tags, map[string]interface{}{"name": "t2"})
+	post := s.createTestRecord(t, posts, map[string]any{"title": "p"})
+	tag1 := s.createTestRecord(t, tags, map[string]any{"name": "t1"})
+	tag2 := s.createTestRecord(t, tags, map[string]any{"name": "t2"})
 
-	err := s.client.AddAssociation(s.ctx, posts, idStr(post["id"]), "tags", []map[string]interface{}{
+	err := s.client.AddAssociation(s.ctx, posts, idStr(post["id"]), "tags", []map[string]any{
 		{"id": idStr(tag1["id"])}, {"id": idStr(tag2["id"])},
 	})
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestBelongsToMany_Through(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list, 2, "belongsToMany should return linked tags")
 
-	err = s.client.RemoveAssociation(s.ctx, posts, idStr(post["id"]), "tags", map[string]interface{}{"id": idStr(tag1["id"])})
+	err = s.client.RemoveAssociation(s.ctx, posts, idStr(post["id"]), "tags", map[string]any{"id": idStr(tag1["id"])})
 	require.NoError(t, err)
 
 	list, err = s.client.ListAssociation(s.ctx, posts, idStr(post["id"]), "tags")

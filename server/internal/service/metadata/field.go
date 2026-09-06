@@ -18,11 +18,11 @@ type Field interface {
 	IsIndexed() bool
 	IsSystem() bool
 	DisplayName() string
-	Options() map[string]interface{}
-	SetOptions(opts map[string]interface{})
-	ValidateValue(ctx context.Context, value interface{}) error
-	ToStoreValue(value interface{}) (interface{}, error)
-	FromStoreValue(value interface{}) (interface{}, error)
+	Options() map[string]any
+	SetOptions(opts map[string]any)
+	ValidateValue(ctx context.Context, value any) error
+	ToStoreValue(value any) (any, error)
+	FromStoreValue(value any) (any, error)
 	DDLColumn() string
 	RefCollectionName() string
 }
@@ -36,27 +36,27 @@ type BaseField struct {
 	indexed     bool
 	system      bool
 	displayName string
-	options     map[string]interface{}
+	options     map[string]any
 	length      int
 	refCollName string
 }
 
-func (f *BaseField) Name() string                    { return f.name }
-func (f *BaseField) Type() string                    { return f.fieldType }
-func (f *BaseField) DBType() DataType                { return f.dbType }
-func (f *BaseField) IsRequired() bool                { return f.required }
-func (f *BaseField) IsUnique() bool                  { return f.unique }
-func (f *BaseField) IsIndexed() bool                 { return f.indexed }
-func (f *BaseField) IsSystem() bool                  { return f.system }
-func (f *BaseField) DisplayName() string             { return f.displayName }
-func (f *BaseField) Options() map[string]interface{} { return f.options }
-func (f *BaseField) RefCollectionName() string       { return f.refCollName }
+func (f *BaseField) Name() string              { return f.name }
+func (f *BaseField) Type() string              { return f.fieldType }
+func (f *BaseField) DBType() DataType          { return f.dbType }
+func (f *BaseField) IsRequired() bool          { return f.required }
+func (f *BaseField) IsUnique() bool            { return f.unique }
+func (f *BaseField) IsIndexed() bool           { return f.indexed }
+func (f *BaseField) IsSystem() bool            { return f.system }
+func (f *BaseField) DisplayName() string       { return f.displayName }
+func (f *BaseField) Options() map[string]any   { return f.options }
+func (f *BaseField) RefCollectionName() string { return f.refCollName }
 
-func (f *BaseField) SetOptions(opts map[string]interface{}) {
+func (f *BaseField) SetOptions(opts map[string]any) {
 	f.options = opts
 }
 
-func (f *BaseField) ValidateValue(ctx context.Context, value interface{}) error {
+func (f *BaseField) ValidateValue(ctx context.Context, value any) error {
 	if f.required && isEmptyValue(value) {
 		return fmt.Errorf("字段 %s 不能为空", f.name)
 	}
@@ -66,7 +66,7 @@ func (f *BaseField) ValidateValue(ctx context.Context, value interface{}) error 
 	return applyBuiltinValidation(f.name, value, validationFromOptions(f.options))
 }
 
-func validationFromOptions(opts map[string]interface{}) *FieldValidationConfig {
+func validationFromOptions(opts map[string]any) *FieldValidationConfig {
 	if opts == nil {
 		return nil
 	}
@@ -77,7 +77,7 @@ func validationFromOptions(opts map[string]interface{}) *FieldValidationConfig {
 	if cfg, ok := raw.(*FieldValidationConfig); ok {
 		return cfg
 	}
-	m, ok := raw.(map[string]interface{})
+	m, ok := raw.(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -111,7 +111,7 @@ func validationFromOptions(opts map[string]interface{}) *FieldValidationConfig {
 	return cfg
 }
 
-func applyBuiltinValidation(fieldName string, value interface{}, cfg *FieldValidationConfig) error {
+func applyBuiltinValidation(fieldName string, value any, cfg *FieldValidationConfig) error {
 	if cfg == nil {
 		return nil
 	}
@@ -144,7 +144,7 @@ func applyBuiltinValidation(fieldName string, value interface{}, cfg *FieldValid
 	return nil
 }
 
-func attachFieldInputOptions(opts map[string]interface{}, input CreateFieldInput) {
+func attachFieldInputOptions(opts map[string]any, input CreateFieldInput) {
 	if input.Validation != nil {
 		opts["validation"] = input.Validation
 	}
@@ -159,11 +159,11 @@ func attachFieldInputOptions(opts map[string]interface{}, input CreateFieldInput
 	}
 }
 
-func (f *BaseField) ToStoreValue(value interface{}) (interface{}, error) {
+func (f *BaseField) ToStoreValue(value any) (any, error) {
 	return value, nil
 }
 
-func (f *BaseField) FromStoreValue(value interface{}) (interface{}, error) {
+func (f *BaseField) FromStoreValue(value any) (any, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -238,7 +238,7 @@ func (f *BaseField) DDLColumn() string {
 	return b.String()
 }
 
-func isEmptyValue(v interface{}) bool {
+func isEmptyValue(v any) bool {
 	if v == nil {
 		return true
 	}
@@ -276,7 +276,7 @@ func isEmptyValue(v interface{}) bool {
 	}
 }
 
-func parseBaseFieldOptions(opts map[string]interface{}) (name, displayName string, required, unique, indexed, system bool, length int, refCollName string) {
+func parseBaseFieldOptions(opts map[string]any) (name, displayName string, required, unique, indexed, system bool, length int, refCollName string) {
 	if opts == nil {
 		return
 	}
@@ -307,7 +307,7 @@ func parseBaseFieldOptions(opts map[string]interface{}) (name, displayName strin
 	return
 }
 
-func newBaseField(fieldType string, dbType DataType, opts map[string]interface{}) BaseField {
+func newBaseField(fieldType string, dbType DataType, opts map[string]any) BaseField {
 	name, displayName, required, unique, indexed, system, length, refCollName := parseBaseFieldOptions(opts)
 	return BaseField{
 		name:        name,

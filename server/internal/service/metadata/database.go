@@ -19,9 +19,9 @@ import (
 const defaultMySQLDSN = "root:123456@tcp(127.0.0.1:3306)/itcodex?parseTime=true&loc=Local&charset=utf8mb4"
 
 type DB interface {
-	Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row
+	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
+	Query(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRow(ctx context.Context, query string, args ...any) *sql.Row
 	Close() error
 }
 
@@ -29,15 +29,15 @@ type sqlDBWrapper struct {
 	db *sql.DB
 }
 
-func (s *sqlDBWrapper) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (s *sqlDBWrapper) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return s.db.ExecContext(ctx, query, args...)
 }
 
-func (s *sqlDBWrapper) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (s *sqlDBWrapper) Query(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return s.db.QueryContext(ctx, query, args...)
 }
 
-func (s *sqlDBWrapper) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (s *sqlDBWrapper) QueryRow(ctx context.Context, query string, args ...any) *sql.Row {
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 
@@ -59,9 +59,9 @@ type YaegiManager interface {
 	LoadScript(script *modelmd.YaegiScript) error
 	DisableScript(id int64) error
 	FindCustomAPI(method, path string) *modelmd.YaegiScript
-	ExecuteBeforeCreate(ctx context.Context, coll *Collection, data map[string]interface{}) (map[string]interface{}, error)
+	ExecuteBeforeCreate(ctx context.Context, coll *Collection, data map[string]any) (map[string]any, error)
 	ExecuteAfterCreate(ctx context.Context, coll *Collection, record *Record) error
-	ExecuteBeforeUpdate(ctx context.Context, coll *Collection, data map[string]interface{}, filter Filter) (map[string]interface{}, error)
+	ExecuteBeforeUpdate(ctx context.Context, coll *Collection, data map[string]any, filter Filter) (map[string]any, error)
 	ExecuteAfterUpdate(ctx context.Context, coll *Collection, records []*Record) error
 	ExecuteBeforeDelete(ctx context.Context, coll *Collection, filter Filter) error
 	ExecuteAfterDelete(ctx context.Context, coll *Collection, affected int) error
@@ -319,7 +319,7 @@ func (d *Database) loadFields(ctx context.Context) error {
 			continue
 		}
 
-		opts := make(map[string]interface{})
+		opts := make(map[string]any)
 		if fm.Options.Valid && fm.Options.String != "" {
 			if err := json.Unmarshal([]byte(fm.Options.String), &opts); err != nil {
 				continue
@@ -493,7 +493,7 @@ func applyCollectionInputMeta(coll *Collection, input CreateCollectionInput) {
 		coll.opts = input.Options.Extra
 	}
 	if coll.opts == nil {
-		coll.opts = make(map[string]interface{})
+		coll.opts = make(map[string]any)
 	}
 	if input.Description != "" {
 		coll.opts["description"] = input.Description
@@ -522,7 +522,7 @@ func applyCollectionInputMeta(coll *Collection, input CreateCollectionInput) {
 // for tree / calendar / comment / file collections.
 func applySpecialCollectionDefaults(coll *Collection, typ CollectionType) {
 	if coll.opts == nil {
-		coll.opts = make(map[string]interface{})
+		coll.opts = make(map[string]any)
 	}
 	switch typ {
 	case CollectionTypeTree:
@@ -564,7 +564,7 @@ func injectDefaultField(coll *Collection, name, displayName string, typ FieldTyp
 	if _, exists := coll.fields[name]; exists {
 		return
 	}
-	opts := map[string]interface{}{
+	opts := map[string]any{
 		"name":        name,
 		"displayName": displayName,
 		"required":    false,
@@ -629,7 +629,7 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 	applySpecialCollectionDefaults(coll, input.Type)
 
 	for _, fi := range input.Fields {
-		opts := make(map[string]interface{})
+		opts := make(map[string]any)
 		opts["name"] = fi.Name
 		opts["displayName"] = fi.DisplayName
 		opts["required"] = fi.IsRequired

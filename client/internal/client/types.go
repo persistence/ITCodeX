@@ -3,73 +3,73 @@ package client
 import "fmt"
 
 type Collection struct {
-	Name        string                 `json:"name"`
-	DisplayName string                 `json:"displayName"`
-	Type        string                 `json:"type"`
-	Description string                 `json:"description,omitempty"`
-	FieldCount  int                    `json:"fieldCount,omitempty"`
-	Options     map[string]interface{} `json:"options,omitempty"`
-	Fields      []Field                `json:"fields,omitempty"`
+	Name        string         `json:"name"`
+	DisplayName string         `json:"displayName"`
+	Type        string         `json:"type"`
+	Description string         `json:"description,omitempty"`
+	FieldCount  int            `json:"fieldCount,omitempty"`
+	Options     map[string]any `json:"options,omitempty"`
+	Fields      []Field        `json:"fields,omitempty"`
 }
 
 type CreateCollectionInput struct {
-	Name         string                 `json:"name"`
-	DisplayName  string                 `json:"displayName"`
-	Type         string                 `json:"type"`
-	Description  string                 `json:"description,omitempty"`
-	Options      map[string]interface{} `json:"options,omitempty"`
-	PresetFields []string               `json:"presetFields,omitempty"`
-	Fields       []CreateFieldInput     `json:"fields,omitempty"`
-	Indexes      []Index                `json:"indexes,omitempty"`
+	Name         string             `json:"name"`
+	DisplayName  string             `json:"displayName"`
+	Type         string             `json:"type"`
+	Description  string             `json:"description,omitempty"`
+	Options      map[string]any     `json:"options,omitempty"`
+	PresetFields []string           `json:"presetFields,omitempty"`
+	Fields       []CreateFieldInput `json:"fields,omitempty"`
+	Indexes      []Index            `json:"indexes,omitempty"`
 }
 
 type UpdateCollectionInput struct {
-	DisplayName string                 `json:"displayName,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Options     map[string]interface{} `json:"options,omitempty"`
+	DisplayName string         `json:"displayName,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Options     map[string]any `json:"options,omitempty"`
 }
 
 type Field struct {
-	Name         string                 `json:"name"`
-	DisplayName  string                 `json:"displayName"`
-	Type         string                 `json:"type"`
-	Required     bool                   `json:"required"`
-	Unique       bool                   `json:"unique"`
-	Indexed      bool                   `json:"indexed"`
-	IsSystem     bool                   `json:"isSystem"`
-	DefaultValue interface{}            `json:"defaultValue,omitempty"`
-	Options      map[string]interface{} `json:"options,omitempty"`
+	Name         string         `json:"name"`
+	DisplayName  string         `json:"displayName"`
+	Type         string         `json:"type"`
+	Required     bool           `json:"required"`
+	Unique       bool           `json:"unique"`
+	Indexed      bool           `json:"indexed"`
+	IsSystem     bool           `json:"isSystem"`
+	DefaultValue any            `json:"defaultValue,omitempty"`
+	Options      map[string]any `json:"options,omitempty"`
 }
 
 type CreateFieldInput struct {
-	Name         string                 `json:"name"`
-	DisplayName  string                 `json:"displayName"`
-	Type         string                 `json:"type"`
-	IsRequired   bool                   `json:"isRequired,omitempty"`
-	IsUnique     bool                   `json:"isUnique,omitempty"`
-	IsIndexed    bool                   `json:"isIndexed,omitempty"`
-	DefaultValue interface{}            `json:"defaultValue,omitempty"`
-	Options      map[string]interface{} `json:"options,omitempty"`
+	Name         string         `json:"name"`
+	DisplayName  string         `json:"displayName"`
+	Type         string         `json:"type"`
+	IsRequired   bool           `json:"isRequired,omitempty"`
+	IsUnique     bool           `json:"isUnique,omitempty"`
+	IsIndexed    bool           `json:"isIndexed,omitempty"`
+	DefaultValue any            `json:"defaultValue,omitempty"`
+	Options      map[string]any `json:"options,omitempty"`
 	// Relation / advanced
-	Target     string `json:"target,omitempty"`
-	ForeignKey string `json:"foreignKey,omitempty"`
-	SourceKey  string `json:"sourceKey,omitempty"`
-	Through    string `json:"through,omitempty"`
-	OtherKey   string `json:"otherKey,omitempty"`
-	TargetKey  string `json:"targetKey,omitempty"`
-	Expression string `json:"expression,omitempty"`
-	Pattern    string `json:"pattern,omitempty"`
-	AutoGenerate bool `json:"autoGenerate,omitempty"`
-	StartsAt   int    `json:"startsAt,omitempty"`
-	IncrementBy int   `json:"incrementBy,omitempty"`
+	Target       string `json:"target,omitempty"`
+	ForeignKey   string `json:"foreignKey,omitempty"`
+	SourceKey    string `json:"sourceKey,omitempty"`
+	Through      string `json:"through,omitempty"`
+	OtherKey     string `json:"otherKey,omitempty"`
+	TargetKey    string `json:"targetKey,omitempty"`
+	Expression   string `json:"expression,omitempty"`
+	Pattern      string `json:"pattern,omitempty"`
+	AutoGenerate bool   `json:"autoGenerate,omitempty"`
+	StartsAt     int    `json:"startsAt,omitempty"`
+	IncrementBy  int    `json:"incrementBy,omitempty"`
 }
 
 type UpdateFieldInput struct {
-	DisplayName string                 `json:"displayName,omitempty"`
-	IsRequired  *bool                  `json:"isRequired,omitempty"`
-	IsUnique    *bool                  `json:"isUnique,omitempty"`
-	IsIndexed   *bool                  `json:"isIndexed,omitempty"`
-	Options     map[string]interface{} `json:"options,omitempty"`
+	DisplayName string         `json:"displayName,omitempty"`
+	IsRequired  *bool          `json:"isRequired,omitempty"`
+	IsUnique    *bool          `json:"isUnique,omitempty"`
+	IsIndexed   *bool          `json:"isIndexed,omitempty"`
+	Options     map[string]any `json:"options,omitempty"`
 }
 
 type Index struct {
@@ -95,14 +95,14 @@ type FindOneOptions struct {
 }
 
 type ListResult struct {
-	List       []map[string]interface{} `json:"list"`
-	Total      int64                    `json:"total"`
-	Page       int                      `json:"page"`
-	PageSize   int                      `json:"pageSize"`
-	TotalPages int                      `json:"totalPages"`
+	List       []map[string]any `json:"list"`
+	Total      int64            `json:"total"`
+	Page       int              `json:"page"`
+	PageSize   int              `json:"pageSize"`
+	TotalPages int              `json:"totalPages"`
 }
 
-type Filter map[string]interface{}
+type Filter map[string]any
 
 type Script struct {
 	ID             int64  `json:"id"`
@@ -134,15 +134,15 @@ type ValidateScriptResult struct {
 }
 
 type Response struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data"`
 }
 
 type APIError struct {
 	Code    int
 	Message string
-	Data    interface{}
+	Data    any
 }
 
 func (e *APIError) Error() string {

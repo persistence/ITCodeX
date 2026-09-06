@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-func BuildWhereClause(filter Filter, params *[]interface{}) (string, error) {
+func BuildWhereClause(filter Filter, params *[]any) (string, error) {
 	return BuildWhereClauseWithCollection(nil, filter, params)
 }
 
-func BuildWhereClauseWithCollection(coll *Collection, filter Filter, params *[]interface{}) (string, error) {
+func BuildWhereClauseWithCollection(coll *Collection, filter Filter, params *[]any) (string, error) {
 	if len(filter) == 0 {
 		return "1=1", nil
 	}
@@ -43,7 +43,7 @@ func BuildWhereClauseWithCollection(coll *Collection, filter Filter, params *[]i
 
 func columnName(key string) string { return key }
 
-func buildLogicalCondition(coll *Collection, op string, value interface{}, params *[]interface{}) (string, error) {
+func buildLogicalCondition(coll *Collection, op string, value any, params *[]any) (string, error) {
 	switch op {
 	case "$and":
 		return buildAndOrCondition(coll, "AND", value, params)
@@ -56,7 +56,7 @@ func buildLogicalCondition(coll *Collection, op string, value interface{}, param
 	}
 }
 
-func buildAndOrCondition(coll *Collection, logicOp string, value interface{}, params *[]interface{}) (string, error) {
+func buildAndOrCondition(coll *Collection, logicOp string, value any, params *[]any) (string, error) {
 	filters, err := toFilterSlice(value)
 	if err != nil {
 		return "", err
@@ -78,10 +78,10 @@ func buildAndOrCondition(coll *Collection, logicOp string, value interface{}, pa
 	return "(" + strings.Join(parts, " "+logicOp+" ") + ")", nil
 }
 
-func buildNotCondition(coll *Collection, value interface{}, params *[]interface{}) (string, error) {
+func buildNotCondition(coll *Collection, value any, params *[]any) (string, error) {
 	filter, ok := value.(Filter)
 	if !ok {
-		m, ok := value.(map[string]interface{})
+		m, ok := value.(map[string]any)
 		if !ok {
 			return "", fmt.Errorf("$not requires a Filter object")
 		}
@@ -94,7 +94,7 @@ func buildNotCondition(coll *Collection, value interface{}, params *[]interface{
 	return "NOT (" + cond + ")", nil
 }
 
-func buildFieldCondition(columnName string, value interface{}, params *[]interface{}, coll *Collection) (string, error) {
+func buildFieldCondition(columnName string, value any, params *[]any, coll *Collection) (string, error) {
 	// Association filter: posts.title -> EXISTS subquery (one level)
 	if coll != nil && strings.Contains(columnName, ".") {
 		parts := strings.SplitN(columnName, ".", 2)
@@ -108,7 +108,7 @@ func buildFieldCondition(columnName string, value interface{}, params *[]interfa
 	switch v := value.(type) {
 	case Filter:
 		return buildOperatorCondition(columnName, v, params)
-	case map[string]interface{}:
+	case map[string]any:
 		return buildOperatorCondition(columnName, Filter(v), params)
 	default:
 		opFn, _ := GetOperator("$eq")
@@ -116,7 +116,7 @@ func buildFieldCondition(columnName string, value interface{}, params *[]interfa
 	}
 }
 
-func buildAssociationFilter(coll *Collection, f Field, targetCol string, value interface{}, params *[]interface{}) (string, error) {
+func buildAssociationFilter(coll *Collection, f Field, targetCol string, value any, params *[]any) (string, error) {
 	ro := GetRelationOptions(f)
 	target := coll.Db().Collection(ro.Target)
 	if target == nil {
@@ -127,7 +127,7 @@ func buildAssociationFilter(coll *Collection, f Field, targetCol string, value i
 	switch v := value.(type) {
 	case Filter:
 		inner, err = buildOperatorCondition(targetCol, v, params)
-	case map[string]interface{}:
+	case map[string]any:
 		inner, err = buildOperatorCondition(targetCol, Filter(v), params)
 	default:
 		opFn, _ := GetOperator("$eq")
@@ -159,7 +159,7 @@ func buildAssociationFilter(coll *Collection, f Field, targetCol string, value i
 	}
 }
 
-func buildOperatorCondition(columnName string, opMap Filter, params *[]interface{}) (string, error) {
+func buildOperatorCondition(columnName string, opMap Filter, params *[]any) (string, error) {
 	if len(opMap) == 0 {
 		return "1=1", nil
 	}
@@ -197,17 +197,17 @@ func buildOperatorCondition(columnName string, opMap Filter, params *[]interface
 	return "(" + strings.Join(conditions, " AND ") + ")", nil
 }
 
-func toFilterSlice(value interface{}) ([]Filter, error) {
+func toFilterSlice(value any) ([]Filter, error) {
 	switch v := value.(type) {
 	case []Filter:
 		return v, nil
-	case []interface{}:
+	case []any:
 		result := make([]Filter, 0, len(v))
 		for i, item := range v {
 			switch f := item.(type) {
 			case Filter:
 				result = append(result, f)
-			case map[string]interface{}:
+			case map[string]any:
 				result = append(result, Filter(f))
 			default:
 				return nil, fmt.Errorf("element %d in logical operator array must be a Filter object", i)
