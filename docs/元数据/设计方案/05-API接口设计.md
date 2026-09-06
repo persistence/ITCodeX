@@ -1,7 +1,7 @@
 # ITCodeX 元数据模块 - API 接口设计
 
-> 版本: v1.2
-> 日期: 2026-09-05
+> 版本: v1.3
+> 日期: 2026-09-06
 > 框架: GoFrame v2（`g.Meta` + `ghttp` + `MiddlewareHandlerResponse`）
 >
 > 本文是 **HTTP API**。[api/](../api/) 是 NocoBase JS SDK 参考，不在本服务中实现 JS 绑定。
@@ -339,12 +339,18 @@ DELETE /api/meta/scripts/:id
 
 ## 3. 标准 CRUD 接口 (/api/c/:collection)
 
-所有动态生成的接口都会经过：
+写接口（POST/PUT/PATCH/DELETE）默认一个数据库工作单元，顺序如下。查询接口（GET）不开启写事务。
+
 1. 元数据解析（根据 collection 名获取字段定义）
-2. Yaegi before 钩子执行
-3. CEL 校验（单字段 + 多字段）
-4. 数据库操作
-5. Yaegi after 钩子执行
+2. `Begin`（若 ctx 尚无事务）
+3. Yaegi beforeValidate / CEL / afterValidate
+4. Yaegi before 钩子
+5. 主表 SQL + 关联表 SQL
+6. Yaegi after 钩子（仍可写当前库，失败则 Rollback）
+7. `Commit`
+8. Yaegi afterCommit（外部副作用；失败不回滚）
+
+细则见 [04 §4.3](./04-Yaegi二开设计.md#43-crud-工作单元事务)。
 
 ### 3.1 查询列表
 ```

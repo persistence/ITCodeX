@@ -21,6 +21,7 @@ const (
 	HookPointAfterUpdate    HookPoint = "afterUpdate"
 	HookPointBeforeDelete   HookPoint = "beforeDelete"
 	HookPointAfterDelete    HookPoint = "afterDelete"
+	HookPointAfterCommit    HookPoint = "afterCommit"
 	HookPointBeforeFind     HookPoint = "beforeFind"
 	HookPointAfterFind      HookPoint = "afterFind"
 	HookPointCustomAPI      HookPoint = "customAPI"
@@ -103,14 +104,14 @@ const (
 )
 
 const (
-	DefaultPrimaryKey      = "id"
-	DefaultPage            = 1
-	DefaultPageSize        = 20
-	MaxPageSize            = 1000
-	ActionCreate           = "create"
-	ActionUpdate           = "update"
-	ErrorValidationCode    = 422
-	ErrorNotFoundCode      = 404
-	ErrorForbiddenCode     = 403
-	ErrorInternalCode      = 500
+	DefaultPrimaryKey   = "id"
+	DefaultPage         = 1
+	DefaultPageSize     = 20
+	MaxPageSize         = 1000
+	ActionCreate        = "create"
+	ActionUpdate        = "update"
+	ErrorValidationCode = 422
+	ErrorNotFoundCode   = 404
+	ErrorForbiddenCode  = 403
+	ErrorInternalCode   = 500
 )

@@ -172,6 +172,109 @@ func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]
 	a.Equal("from_hook", record.Get("auto_field"))
 }
 
+func TestYaegi_WriteUnitOfWork(t *testing.T) {
+	a := assert.New(t)
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	ym := NewYaegiManager(db)
+	db.SetYaegi(ym)
+
+	parent := createBasicCollection(t, db, "uow_parent")
+	child := createBasicCollection(t, db, "uow_child")
+	_ = child
+	err := parent.AddField(ctx, CreateFieldInput{Name: "auto_field", Type: "string", DisplayName: "auto"})
+	a.NoError(err)
+
+	const afterFail = `
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"itcodex/metadata"
+)
+
+func AfterCreate(ctx context.Context, result map[string]interface{}) error {
+	items := metadata.Collection(ctx, "uow_child")
+	if items == nil {
+		return fmt.Errorf("child collection missing")
+	}
+	_, err := items.Create(map[string]interface{}{"title": "child_row", "age": 1})
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("force rollback")
+}
+`
+	err = ym.LoadScript(&modelmd.YaegiScript{
+		CollectionName: "uow_parent",
+		Name:           "uow_fail",
+		HookPoint:      string(HookPointAfterCreate),
+		Content:        afterFail,
+		Enabled:        true,
+	})
+	a.NoError(err)
+
+	_, err = parent.Repository().Create(ctx, &CreateOptions{
+		Values: map[string]interface{}{"title": "parent_row", "age": 1},
+	})
+	a.Error(err)
+
+	nParent, err := parent.Repository().Count(ctx, &CountOptions{})
+	a.NoError(err)
+	a.Equal(0, nParent)
+	nChild, err := child.Repository().Count(ctx, &CountOptions{})
+	a.NoError(err)
+	a.Equal(0, nChild)
+}
+
+func TestYaegi_AfterCommitHook(t *testing.T) {
+	a := assert.New(t)
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	ym := NewYaegiManager(db)
+	db.SetYaegi(ym)
+
+	coll := createBasicCollection(t, db, "uow_commit")
+	err := coll.AddField(ctx, CreateFieldInput{Name: "auto_field", Type: "string", DisplayName: "auto"})
+	a.NoError(err)
+
+	const script = `
+package main
+
+import (
+	"context"
+
+	"itcodex/metadata"
+)
+
+func AfterCommit(ctx context.Context, result map[string]interface{}) error {
+	repo := metadata.Collection(ctx, "uow_commit")
+	_, err := repo.Update(result["id"], map[string]interface{}{"auto_field": "committed"})
+	return err
+}
+`
+	err = ym.LoadScript(&modelmd.YaegiScript{
+		CollectionName: "uow_commit",
+		Name:           "uow_commit_hook",
+		HookPoint:      string(HookPointAfterCommit),
+		Content:        script,
+		Enabled:        true,
+	})
+	a.NoError(err)
+
+	record, err := coll.Repository().Create(ctx, &CreateOptions{
+		Values: map[string]interface{}{"title": "c1", "age": 2},
+	})
+	a.NoError(err)
+	found, err := coll.Repository().FindOne(ctx, &FindOneOptions{FilterByTk: record.Id()})
+	a.NoError(err)
+	a.Equal("committed", found.Get("auto_field"))
+}
+
 func TestYaegi_CustomAPI(t *testing.T) {
 	a := assert.New(t)
 	db := newTestDB(t)

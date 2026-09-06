@@ -1,7 +1,7 @@
 # ITCodeX 元数据模块 - MySQL 集成设计
 
-> 版本: v1.2
-> 日期: 2026-09-05
+> 版本: v1.3
+> 日期: 2026-09-06
 > 数据库: MySQL 8（Docker 本机）
 > 系统表走 GoFrame dao/do；业务表走 database/sql。见 [README · GoFrame 使用边界](./README.md#goframe-使用边界)。
 
@@ -181,9 +181,29 @@ Filter 翻译为参数化 SQL，占位符使用 `?`。MySQL 支持 `LIMIT ? OFFS
 
 ## 6. 事务
 
+### 6.1 通道
+
 - 系统表：优先 `dao.Xxx.Transaction` / `g.DB().Transaction`
-- 业务表：`database/sql` 的 `Begin` / `Commit` / `Rollback`
-- 同一请求若同时写系统表和业务表，在外层开一个 `g.DB().Transaction`，业务 SQL 使用事务内的 `*sql.Tx`（或 `gdb.TX` 转底层连接），避免双连接提交
+- 业务表：`database/sql` 的 `BeginTx` / `Commit` / `Rollback`，`*sql.Tx` 放入 `context`
+- 同一请求若同时写系统表和业务表，在外层开一个事务，业务 SQL 使用同一 `*sql.Tx`（或 `gdb.TX` 转底层连接），避免双连接提交
+
+### 6.2 业务写入默认工作单元
+
+`Repository.Create` / `Update` / `Destroy` 以及关联 add/set/remove **默认 Begin**，覆盖：
+
+1. 主表语句
+2. 关联表 / 中间表语句
+3. Yaegi 钩子内经 `Collection(ctx, …)` 发出的业务表 SQL
+
+实现必须从 `context` 取 Tx（见 [04 §4.3](./04-Yaegi二开设计.md#43-crud-工作单元事务)）。钩子不得另开连接写同一库。
+
+嵌套 `Transaction()` 或钩子内再 `Create`：join 已有 Tx，MySQL 不做真正的嵌套事务。
+
+DDL 不放在该工作单元内（MySQL DDL 隐式提交）。
+
+### 6.3 隔离级别
+
+默认使用连接/驱动默认隔离级别（InnoDB REPEATABLE READ）。不在 v1 暴露每请求隔离级别参数。
 
 ## 7. 性能建议
 

@@ -7,11 +7,19 @@ import (
 
 // YaegiDB exposes limited database operations to Yaegi scripts (no *sql.DB).
 type YaegiDB struct {
-	db *Database
+	db  *Database
+	ctx context.Context
 }
 
 func NewYaegiDB(db *Database) *YaegiDB {
-	return &YaegiDB{db: db}
+	return &YaegiDB{db: db, ctx: context.Background()}
+}
+
+func (y *YaegiDB) hookCtx() context.Context {
+	if y != nil && y.ctx != nil {
+		return y.ctx
+	}
+	return context.Background()
 }
 
 func (y *YaegiDB) Collection(name string) *YaegiRepository {
@@ -19,7 +27,7 @@ func (y *YaegiDB) Collection(name string) *YaegiRepository {
 	if coll == nil {
 		return nil
 	}
-	return &YaegiRepository{repo: coll.Repository()}
+	return &YaegiRepository{repo: coll.Repository(), ctx: y.hookCtx()}
 }
 
 func (y *YaegiDB) HasCollection(name string) bool {
@@ -28,11 +36,19 @@ func (y *YaegiDB) HasCollection(name string) bool {
 
 type YaegiRepository struct {
 	repo Repository
+	ctx  context.Context
+}
+
+func (r *YaegiRepository) repoCtx() context.Context {
+	if r != nil && r.ctx != nil {
+		return r.ctx
+	}
+	return context.Background()
 }
 
 func (r *YaegiRepository) Find(filter map[string]interface{}) ([]map[string]interface{}, error) {
 	opts := &FindOptions{CommonOptions: CommonOptions{Filter: Filter(filter)}, PageSize: MaxPageSize}
-	records, err := r.repo.Find(context.Background(), opts)
+	records, err := r.repo.Find(r.repoCtx(), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +61,7 @@ func (r *YaegiRepository) Find(filter map[string]interface{}) ([]map[string]inte
 
 func (r *YaegiRepository) FindOne(filter map[string]interface{}) (map[string]interface{}, error) {
 	opts := &FindOneOptions{CommonOptions: CommonOptions{Filter: Filter(filter)}}
-	rec, err := r.repo.FindOne(context.Background(), opts)
+	rec, err := r.repo.FindOne(r.repoCtx(), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +69,7 @@ func (r *YaegiRepository) FindOne(filter map[string]interface{}) (map[string]int
 }
 
 func (r *YaegiRepository) Create(values map[string]interface{}) (map[string]interface{}, error) {
-	rec, err := r.repo.Create(context.Background(), &CreateOptions{Values: values})
+	rec, err := r.repo.Create(r.repoCtx(), &CreateOptions{Values: values})
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +77,7 @@ func (r *YaegiRepository) Create(values map[string]interface{}) (map[string]inte
 }
 
 func (r *YaegiRepository) Update(id interface{}, values map[string]interface{}) (map[string]interface{}, error) {
-	rec, _, err := r.repo.Update(context.Background(), &UpdateOptions{FilterByTk: id, Values: values})
+	rec, _, err := r.repo.Update(r.repoCtx(), &UpdateOptions{FilterByTk: id, Values: values})
 	if err != nil {
 		return nil, err
 	}
@@ -72,17 +88,20 @@ func (r *YaegiRepository) Update(id interface{}, values map[string]interface{}) 
 }
 
 func (r *YaegiRepository) Destroy(id interface{}) error {
-	_, err := r.repo.Destroy(context.Background(), &DestroyOptions{FilterByTk: id})
+	_, err := r.repo.Destroy(r.repoCtx(), &DestroyOptions{FilterByTk: id})
 	return err
 }
 
 func (m *DefaultYaegiManager) buildExports() map[string]map[string]reflect.Value {
-	y := NewYaegiDB(m.db)
-	exports := map[string]map[string]reflect.Value{
-		"itcodex/metadata": {
-			"GetDB":      reflect.ValueOf(func() *YaegiDB { return y }),
+	return map[string]map[string]reflect.Value{
+		"itcodex/metadata/metadata": {
+			"GetDB": reflect.ValueOf(func(ctx context.Context) *YaegiDB {
+				return &YaegiDB{db: m.db, ctx: ctx}
+			}),
+			"Collection": reflect.ValueOf(func(ctx context.Context, name string) *YaegiRepository {
+				return (&YaegiDB{db: m.db, ctx: ctx}).Collection(name)
+			}),
 			"NewYaegiDB": reflect.ValueOf(NewYaegiDB),
 		},
 	}
-	return exports
 }

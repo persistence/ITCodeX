@@ -1,14 +1,15 @@
 # ITCodeX 元数据模块 - Yaegi 二次开发设计
 
-> 版本: v1.2
-> 日期: 2026-09-05
+> 版本: v1.3
+> 日期: 2026-09-06
 > 技术: Yaegi (Go 语言解释器)
 > 钩子与自定义 API 中间件放在 `internal/service/middleware`，由 `internal/cmd` 注册。自定义 API 保持通配路由，不为脚本生成 `g.Meta`。
 
 ## 1. 设计目标
 
 - 支持通过 Yaegi 在运行时执行 Go 脚本，无需重新编译主程序
-- CRUD 接口支持生命周期钩子（before/after create/update/delete 等）
+- CRUD 接口支持生命周期钩子（before/after create/update/delete、afterCommit）
+- 钩子内改当前库业务表时，与主表、关联写入共用**同一个数据库事务**
 - 每个元数据表支持自定义 API 接口（自定义 path）
 - 提供安全的沙箱环境，导出必要的 API 给脚本使用
 - 脚本热加载，修改后无需重启即可生效
@@ -31,11 +32,12 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                  Yaegi 脚本引擎                               │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │                    钩子执行器                           │  │
-│  │  beforeCreate ──► create ──► afterCreate              │  │
-│  │  beforeUpdate ──► update ──► afterUpdate              │  │
-│  │  beforeDelete ──► delete ──► afterDelete              │  │
-│  │  beforeValidate / afterValidate                       │  │
+│  │                    钩子执行器（写路径同一事务）          │  │
+│  │  BEGIN                                                │  │
+│  │  beforeValidate → validate → afterValidate            │  │
+│  │  beforeCreate → 主表+关联 → afterCreate               │  │
+│  │  COMMIT → afterCommit                                 │  │
+│  │  (update/delete 同理)                                 │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │                  自定义API处理器                        │  │
@@ -137,11 +139,13 @@ var DB *YaegiDB
 
 // YaegiDB 封装给脚本使用的数据库API
 type YaegiDB struct {
-    // 获取指定表的Repository
-    func Collection(name string) *YaegiRepository
+    // 必须传入钩子收到的 ctx。实现从 ctx 取出当前工作单元的 *sql.Tx，
+    // 返回的 Repository 所有 SQL 走该连接；没有事务时才用连接池。
+    func Collection(ctx context.Context, name string) *YaegiRepository
 }
 
 // YaegiRepository 数据仓库API（安全封装）
+// 由 Collection(ctx, name) 构造，内部绑定该 ctx（含工作单元 Tx）。
 type YaegiRepository struct {
     // 查询
     func Find(filter map[string]interface{}, opts ...FindOption) ([]map[string]interface{}, error)
@@ -158,15 +162,9 @@ type YaegiRepository struct {
     func Delete(filter map[string]interface{}) (int, error)
     func DeleteByID(id interface{}) error
 
-    // 事务
-    func Transaction(fn func(tx *YaegiTX) error) error
-}
-
-// YaegiTX 事务对象
-type YaegiTX struct {
-    *YaegiRepository
-    func Commit() error
-    func Rollback() error
+    // 事务：已在 CRUD 工作单元内时为加入（join），禁止再 Begin。
+    // 仅自定义 API、或钩子外的独立脚本需要自己开事务时使用。
+    func Transaction(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // FindOption 查询选项
@@ -295,8 +293,11 @@ Yaegi 脚本需要导出特定签名的函数作为钩子：
 // 返回 modified data 可修改要创建的数据
 func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
 
-// AfterCreateHook 创建后钩子
+// AfterCreateHook 创建后钩子（仍在事务内，可继续写当前库）
 func AfterCreate(ctx context.Context, result map[string]interface{}) error
+
+// AfterCommitHook 事务提交成功后钩子（禁止再写当前工作单元；可发通知）
+func AfterCommit(ctx context.Context, result map[string]interface{}) error
 
 // BeforeUpdateHook 更新前钩子
 func BeforeUpdate(ctx context.Context, oldData, newData map[string]interface{}) (map[string]interface{}, error)
@@ -320,6 +321,103 @@ func AfterValidate(ctx context.Context, data map[string]interface{}) error
 // CustomAPIHandler 自定义API处理函数
 func Handle(ctx *context.YaegiHTTPContext)
 ```
+
+### 4.3 CRUD 工作单元（事务）
+
+目标：一次 HTTP 写入（或一次 `Repository.Create/Update/Destroy`）里，**主表行、关联表/中间表、Yaegi 对当前 MySQL 业务表的读写** 要么全部成功，要么全部回滚。
+
+#### 4.3.1 范围
+
+| 纳入默认工作单元 | 不纳入 |
+|------------------|--------|
+| 主表 INSERT/UPDATE/DELETE | Find / Count / 列表查询 |
+| 关联写入（belongsTo 外键、hasOne/hasMany 回写、belongsToMany 中间表） | `afterCommit` 钩子 |
+| `beforeValidate` / `afterValidate` / `before*` / `afterCreate|Update|Delete` | HTTP、邮件、消息队列等外部副作用 |
+| 钩子内 `metadata.DB.Collection(ctx, name)` 对**当前实例同一 MySQL** 的 Create/Update/Delete | 钩子内 DDL（`ALTER`/`CREATE TABLE` 等） |
+| 关联 HTTP：add / set / remove | 系统表 dao 写入（除非外层显式共用同一 `*sql.Tx`，见 07） |
+
+`CreateMany`：**每条记录一个工作单元**（与循环调用 Create 一致）。需要整批原子时，由调用方包一层 `Repository.Transaction`。
+
+#### 4.3.2 执行顺序（Create）
+
+```
+若 ctx 尚无 Tx：Begin，并把 *sql.Tx 写入 ctx
+  CEL / beforeValidate / afterValidate
+  beforeCreate          ← 可改 payload；Collection(ctx) 写库走同一 Tx
+  INSERT 主表
+  关联写入（pending SetAssociation）
+  FindOne（同一 Tx，供 after 看到未提交数据）
+  afterCreate           ← 可再写当前库；error → Rollback
+Commit
+afterCommit             ← 仅成功提交后；失败只记日志，不回滚已提交数据
+```
+
+Update / Destroy 同构：`before*` 与主表+关联+`after*` 在 Commit 前；`afterCommit` 在 Commit 后。`after*` 返回 error 必须 Rollback（含钩子已写入的行）。
+
+已处于 `Transaction()` 内时：**禁止第二次 Begin**，子 Create/钩子全部 join。MySQL 不使用嵌套事务；也不对内层再 `Commit`。
+
+#### 4.3.3 context 传递（实现约定）
+
+```go
+type txCtxKey struct{}
+
+func ContextWithTx(ctx context.Context, tx *sql.Tx) context.Context
+func TxFromContext(ctx context.Context) *sql.Tx // 没有则 nil
+
+func (r *GenericRepository) execDB(ctx context.Context) DB {
+    if tx := TxFromContext(ctx); tx != nil {
+        return wrapTx(tx)
+    }
+    if r.txdb != nil {
+        return r.txdb
+    }
+    return r.coll.Db().DB()
+}
+```
+
+规则：
+
+1. HTTP Controller 只把 `r.Context()` 传给 Repository，**不要**自己 Begin。
+2. Yaegi 钩子签名里的 `ctx` 必须是上述带 Tx 的 context；脚本写库只能 `Collection(ctx, name)`，禁止持有包级无 ctx 的连接。
+3. 钩子里再调 `Create` 时，内层检测到 Tx 已存在则不再开事务，避免「钩子提交、主表回滚」。
+4. 脚本超时（默认 5s）包含在事务持锁时间内；超时视为钩子失败并 Rollback。
+
+#### 4.3.4 Yaegi 必须遵守
+
+```go
+func AfterCreate(ctx context.Context, result map[string]interface{}) error {
+    // 正确：改当前库走同一事务
+    items := metadata.DB.Collection(ctx, "order_items")
+    _, err := items.Create(map[string]interface{}{
+        "orderId": result["id"],
+        "sku":     "welcome",
+    })
+    return err // 非 nil → 订单主表与本行一起回滚
+}
+
+func AfterCommit(ctx context.Context, result map[string]interface{}) error {
+    // 正确：通知类副作用
+    utils.LogInfo("order committed", result["id"])
+    return nil
+}
+```
+
+禁止：
+
+- `Collection` 不传钩子 `ctx`（会落到连接池，提交与回滚对不上）
+- 在 `afterCreate` 里发 HTTP/邮件（回滚后无法收回）
+- 在 CRUD 钩子里执行 DDL
+- 在已有工作单元内再 `Begin` 后手动 `Commit` 内层
+
+自定义 API（`/api/custom/*`）默认**不**自动开工作单元；脚本自己 `Transaction(ctx, ...)`。若自定义 API 内部调用 `Repository.Create`，则走 Create 自己的默认事务（与标准 CRUD 一致）。
+
+#### 4.3.5 失败语义
+
+| 失败点 | 行为 |
+|--------|------|
+| before / 校验 / 主表 SQL / 关联 SQL / after | Rollback 整单，HTTP 返回错误 |
+| Commit 失败 | 视为整单失败 |
+| afterCommit 失败 | 数据已提交；记录错误，HTTP 仍按成功（或可选 warning 字段，不改 2xx 为 5xx） |
 
 ## 5. Yaegi 脚本管理
 
@@ -360,6 +458,7 @@ const (
     HookAfterUpdate    HookPointType = "afterUpdate"
     HookBeforeDelete   HookPointType = "beforeDelete"
     HookAfterDelete    HookPointType = "afterDelete"
+    HookAfterCommit    HookPointType = "afterCommit"
     HookBeforeValidate HookPointType = "beforeValidate"
     HookAfterValidate  HookPointType = "afterValidate"
     HookCustomAPI      HookPointType = "customAPI"
@@ -527,7 +626,7 @@ func (m *YaegiManager) ExecuteHook(ctx context.Context, collection, hook string,
 
 ### 5.3 钩子执行中间件（GoFrame）
 
-放在 `internal/service/middleware`。CRUD 钩子由 Repository 在 create/update/destroy 前后调用更稳妥；HTTP 中间件只做上下文注入。自定义 API 仍走 `/api/custom/*` 通配，不在 `g.Meta` 里为每个脚本建路由。错误通过 `gerror` 返回，交给 `MiddlewareHandlerResponse`，不要手写 `WriteJson` 作为主路径。
+放在 `internal/service/middleware`。**CRUD 钩子必须在 Repository 工作单元内调用**（带 Tx 的 ctx），不能放在 HTTP 中间件里执行写库钩子，否则无法与主表同一事务。HTTP 中间件只做上下文注入。自定义 API 仍走 `/api/custom/*` 通配。
 
 ```go
 package middleware
@@ -538,7 +637,7 @@ import (
     "itcodex/server/internal/service/metadata"
 )
 
-// YaegiCRUDMiddleware 可选。优先在 Repository 内调钩子；此处仅示意 HTTP 接入。
+// YaegiCRUDMiddleware 仅示意，生产路径不要在中间件执行写库钩子。
 func YaegiCRUDMiddleware(db *metadata.Database) func(r *ghttp.Request) {
     return func(r *ghttp.Request) {
         collectionName := r.GetRouterString("collection")
@@ -653,6 +752,7 @@ import (
     "context"
     "fmt"
 
+    "itcodex/metadata"
     "itcodex/utils"
 )
 
@@ -674,16 +774,19 @@ func BeforeCreate(ctx context.Context, data map[string]interface{}) (map[string]
     return data, nil
 }
 
-// AfterCreate 创建订单后发送通知
+// AfterCreate 仍在事务内：可写当前库（如订单明细）
 func AfterCreate(ctx context.Context, result map[string]interface{}) error {
-    orderID := result["id"]
-    orderNo := result["orderNo"]
+    items := metadata.DB.Collection(ctx, "order_items")
+    _, err := items.Create(map[string]interface{}{
+        "orderId": result["id"],
+        "title":   "bootstrap",
+    })
+    return err
+}
 
-    utils.LogInfo("新订单创建成功:", orderID, orderNo)
-
-    // 这里可以调用其他服务发送通知
-    // ...
-
+// AfterCommit 事务提交后再记日志 / 发通知
+func AfterCommit(ctx context.Context, result map[string]interface{}) error {
+    utils.LogInfo("新订单已提交:", result["id"], result["orderNo"])
     return nil
 }
 
@@ -814,6 +917,8 @@ func BeforeValidate(ctx context.Context, data map[string]interface{}) (map[strin
 3. **禁止系统调用**：不导出 syscall、os/exec 等包
 4. **超时控制**：脚本执行设置超时（默认5秒）
 5. **资源限制**：限制内存使用，防止死循环
+6. **禁止 DDL**：CRUD 钩子不得执行会隐式提交的 DDL
+7. **必须带 ctx**：写库必须使用钩子传入的 `context`，禁止无事务连接池旁路
 
 ```go
 // 黑名单包：不允许脚本import

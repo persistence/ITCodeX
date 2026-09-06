@@ -65,6 +65,7 @@ type YaegiManager interface {
 	ExecuteAfterUpdate(ctx context.Context, coll *Collection, records []*Record) error
 	ExecuteBeforeDelete(ctx context.Context, coll *Collection, filter Filter) error
 	ExecuteAfterDelete(ctx context.Context, coll *Collection, affected int) error
+	ExecuteAfterCommit(ctx context.Context, coll *Collection, record *Record) error
 	ExecuteCustomAPI(script *modelmd.YaegiScript, ctx *yaegictx.YaegiHTTPContext) error
 	ValidateScript(content string) error
 	ExecuteAfterFind(ctx context.Context, coll *Collection, records []*Record) error

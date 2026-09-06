@@ -231,6 +231,37 @@ func (m *DefaultYaegiManager) ExecuteAfterCreate(ctx context.Context, coll *Coll
 	return err
 }
 
+func (m *DefaultYaegiManager) ExecuteAfterCommit(ctx context.Context, coll *Collection, record *Record) (err error) {
+	if record == nil {
+		return nil
+	}
+	hooks := m.getHooks(coll.Name(), HookPointAfterCommit)
+	for _, inst := range hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("script panic: %v", r)
+				}
+			}()
+			if err != nil {
+				return
+			}
+			fn, ok := inst.hooks[HookPointAfterCommit]
+			if !ok || !fn.IsValid() {
+				return
+			}
+			args := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(record.Data())}
+			returns := fn.Call(args)
+			if len(returns) > 0 {
+				if hookErr, ok := returns[0].Interface().(error); ok && hookErr != nil {
+					err = hookErr
+				}
+			}
+		}()
+	}
+	return err
+}
+
 func (m *DefaultYaegiManager) ExecuteBeforeUpdate(ctx context.Context, coll *Collection, data map[string]interface{}, filter Filter) (result map[string]interface{}, err error) {
 	result = data
 	hooks := m.getHooks(coll.Name(), HookPointBeforeUpdate)
@@ -398,6 +429,7 @@ func (m *DefaultYaegiManager) compileScript(script *modelmd.YaegiScript) (*Yaegi
 		HookPointAfterUpdate,
 		HookPointBeforeDelete,
 		HookPointAfterDelete,
+		HookPointAfterCommit,
 		HookPointBeforeFind,
 		HookPointAfterFind,
 	}

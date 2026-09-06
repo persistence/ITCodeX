@@ -36,6 +36,7 @@ type GenericRepository struct {
 	coll *Collection
 	tx   *sql.Tx
 	txdb DB
+	unit *writeUnit
 }
 
 func NewGenericRepository(coll *Collection) *GenericRepository {
@@ -48,7 +49,10 @@ func (r *GenericRepository) Collection() *Collection {
 	return r.coll
 }
 
-func (r *GenericRepository) execDB() DB {
+func (r *GenericRepository) execDB(ctx context.Context) DB {
+	if u := WriteUnitFromContext(ctx); u != nil && u.tx != nil {
+		return u.tx
+	}
 	if r.txdb != nil {
 		return r.txdb
 	}
@@ -56,10 +60,15 @@ func (r *GenericRepository) execDB() DB {
 }
 
 func (r *GenericRepository) withTx(tx *sql.Tx) *GenericRepository {
+	u := r.unit
+	if u == nil {
+		u = &writeUnit{tx: &txDB{tx: tx}}
+	}
 	return &GenericRepository{
 		coll: r.coll,
 		tx:   tx,
 		txdb: &txDB{tx: tx},
+		unit: u,
 	}
 }
 
@@ -334,6 +343,15 @@ func (r *GenericRepository) applyAutoFields(values map[string]interface{}) error
 }
 
 func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*Record, error) {
+	if !r.inWriteUnit(ctx) {
+		var record *Record
+		err := r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+			var e error
+			record, e = repo.Create(ctx, opts)
+			return e
+		})
+		return record, err
+	}
 	if opts == nil {
 		opts = &CreateOptions{}
 	}
@@ -396,7 +414,7 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 		strings.Join(placeholders, ", "),
 	)
 
-	db := r.execDB()
+	db := r.execDB(ctx)
 	result, err := db.Exec(ctx, query, args...)
 	if err != nil {
 		return nil, NewSystemError(err)
@@ -430,6 +448,13 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 			return nil, err
 		}
 	}
+
+	created := record
+	r.registerAfterCommit(ctx, func() {
+		if yaegi := r.coll.Db().Yaegi(); yaegi != nil && created != nil {
+			_ = yaegi.ExecuteAfterCommit(withAfterCommitRunning(context.Background()), r.coll, created)
+		}
+	})
 
 	return record, nil
 }
@@ -520,7 +545,7 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 	b.WriteString(" LIMIT ? OFFSET ?")
 	params = append(params, limit, offset)
 
-	db := r.execDB()
+	db := r.execDB(ctx)
 	rows, err := db.Query(ctx, b.String(), params...)
 	if err != nil {
 		return nil, NewSystemError(err)
@@ -614,7 +639,7 @@ func (r *GenericRepository) Count(ctx context.Context, opts *CountOptions) (int,
 		whereClause,
 	)
 
-	db := r.execDB()
+	db := r.execDB(ctx)
 	var count int
 	row := db.QueryRow(ctx, query, params...)
 	if err := row.Scan(&count); err != nil {
@@ -625,6 +650,18 @@ func (r *GenericRepository) Count(ctx context.Context, opts *CountOptions) (int,
 }
 
 func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*Record, int, error) {
+	if !r.inWriteUnit(ctx) {
+		var (
+			record   *Record
+			affected int
+		)
+		err := r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+			var e error
+			record, affected, e = repo.Update(ctx, opts)
+			return e
+		})
+		return record, affected, err
+	}
 	if opts == nil {
 		return nil, 0, fmt.Errorf("update options required")
 	}
@@ -730,7 +767,7 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 			whereClause,
 		)
 
-		db := r.execDB()
+		db := r.execDB(ctx)
 		result, execErr := db.Exec(ctx, query, params...)
 		if execErr != nil {
 			return nil, 0, NewSystemError(execErr)
@@ -770,10 +807,26 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 		}
 	}
 
+	committed := updatedRecord
+	r.registerAfterCommit(ctx, func() {
+		if yaegi := r.coll.Db().Yaegi(); yaegi != nil && committed != nil {
+			_ = yaegi.ExecuteAfterCommit(withAfterCommitRunning(context.Background()), r.coll, committed)
+		}
+	})
+
 	return updatedRecord, int(affected), nil
 }
 
 func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (int, error) {
+	if !r.inWriteUnit(ctx) {
+		var affected int
+		err := r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+			var e error
+			affected, e = repo.Destroy(ctx, opts)
+			return e
+		})
+		return affected, err
+	}
 	if opts == nil {
 		return 0, fmt.Errorf("destroy options required")
 	}
@@ -787,7 +840,7 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 			return 0, NewForbiddenError("禁止无条件清空表，请提供 filter 或开启 allowTruncate")
 		}
 		query := fmt.Sprintf(`DELETE FROM %s`, quoteIdent(r.coll.TableName()))
-		db := r.execDB()
+		db := r.execDB(ctx)
 		result, err := db.Exec(ctx, query)
 		if err != nil {
 			return 0, NewSystemError(err)
@@ -825,7 +878,7 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 		whereClause,
 	)
 
-	db := r.execDB()
+	db := r.execDB(ctx)
 	result, err := db.Exec(ctx, query, params...)
 	if err != nil {
 		return 0, NewSystemError(err)
@@ -846,30 +899,17 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 }
 
 func (r *GenericRepository) Transaction(ctx context.Context, fn func(tx Repository) error) error {
-	sqlDB := r.coll.Db().SqlDB()
-	if sqlDB == nil {
-		return fmt.Errorf("no sql db available")
-	}
-
-	tx, err := sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		return NewSystemError(err)
-	}
-
-	txRepo := r.withTx(tx)
-
-	if err := fn(txRepo); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return NewSystemError(fmt.Errorf("transaction rollback failed: %v (original error: %w)", rbErr, err))
+	if r.inWriteUnit(ctx) {
+		u := WriteUnitFromContext(ctx)
+		repo := r
+		if u != nil {
+			repo = r.withUnit(u)
 		}
-		return err
+		return fn(repo)
 	}
-
-	if err := tx.Commit(); err != nil {
-		return NewSystemError(err)
-	}
-
-	return nil
+	return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+		return fn(repo)
+	})
 }
 
 var _ Repository = (*GenericRepository)(nil)

@@ -162,7 +162,7 @@ func (r *GenericRepository) loadBelongsToMany(ctx context.Context, records []*Re
 	if target == nil || ro.Through == "" {
 		return nil
 	}
-	db := r.execDB()
+	db := r.execDB(ctx)
 	for _, rec := range records {
 		srcID := rec.Get(ro.SourceKey)
 		q := fmt.Sprintf(`SELECT %s FROM %s WHERE %s = ?`, quoteIdent(ro.OtherKey), quoteIdent(ro.Through), quoteIdent(ro.ForeignKey))
@@ -453,6 +453,11 @@ func (r *GenericRepository) ListAssociation(ctx context.Context, sourceID interf
 
 // AddAssociation adds related ids (POST).
 func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+	if !r.inWriteUnit(ctx) {
+		return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+			return repo.AddAssociation(ctx, sourceID, association, body)
+		})
+	}
 	f := r.coll.GetField(association)
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
@@ -475,7 +480,7 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interfa
 		if target == nil {
 			return fmt.Errorf("目标集合不存在: %s", ro.Target)
 		}
-		db := r.execDB()
+		db := r.execDB(ctx)
 		for _, id := range ids {
 			id = normalizeAssocID(id)
 			_, err := db.Exec(ctx, fmt.Sprintf(`UPDATE %s SET %s = ? WHERE %s = ?`,
@@ -490,7 +495,7 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interfa
 		if ro.Through == "" {
 			return fmt.Errorf("缺少 through 表")
 		}
-		db := r.execDB()
+		db := r.execDB(ctx)
 		src := normalizeAssocID(sourceID)
 		for _, id := range ids {
 			_, err := db.Exec(ctx, fmt.Sprintf(`INSERT IGNORE INTO %s (%s, %s) VALUES (?, ?)`,
@@ -507,6 +512,11 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID interfa
 
 // SetAssociation replaces association (PUT).
 func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+	if !r.inWriteUnit(ctx) {
+		return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+			return repo.SetAssociation(ctx, sourceID, association, body)
+		})
+	}
 	f := r.coll.GetField(association)
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
@@ -523,7 +533,7 @@ func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID interfa
 		if target == nil {
 			return fmt.Errorf("目标集合不存在")
 		}
-		db := r.execDB()
+		db := r.execDB(ctx)
 		src := normalizeAssocID(sourceID)
 		// clear existing
 		_, err := db.Exec(ctx, fmt.Sprintf(`UPDATE %s SET %s = NULL WHERE %s = ?`,
@@ -533,7 +543,7 @@ func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID interfa
 		}
 		return r.AddAssociation(ctx, sourceID, association, body)
 	case FieldTypeBelongsToMany:
-		db := r.execDB()
+		db := r.execDB(ctx)
 		_, err := db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, quoteIdent(ro.Through), quoteIdent(ro.ForeignKey)), normalizeAssocID(sourceID))
 		if err != nil {
 			return NewSystemError(err)
@@ -546,6 +556,11 @@ func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID interfa
 
 // RemoveAssociation removes association (DELETE).
 func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID interface{}, association string, body interface{}) error {
+	if !r.inWriteUnit(ctx) {
+		return r.runWrite(ctx, func(ctx context.Context, repo *GenericRepository) error {
+			return repo.RemoveAssociation(ctx, sourceID, association, body)
+		})
+	}
 	f := r.coll.GetField(association)
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
@@ -587,7 +602,7 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID inte
 		}
 		return nil
 	case FieldTypeBelongsToMany:
-		db := r.execDB()
+		db := r.execDB(ctx)
 		src := normalizeAssocID(sourceID)
 		if len(ids) == 0 {
 			_, err := db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, quoteIdent(ro.Through), quoteIdent(ro.ForeignKey)), src)

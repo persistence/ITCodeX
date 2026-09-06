@@ -1,7 +1,7 @@
 # ITCodeX 元数据模块 - 设计方案
 
-> 版本: v1.2
-> 日期: 2026-09-05
+> 版本: v1.3
+> 日期: 2026-09-06
 > 技术栈: GoFrame v2 + MySQL 8 + CEL-Go + Yaegi
 > **代码根路径**: [d:\code\ITCodeX\server](file:///d:/code/ITCodeX/server)
 
@@ -14,7 +14,7 @@
 | 01 | [总体架构设计](./01-总体架构设计.md) | 整体架构分层、模块职责、启动流程、系统表结构 |
 | 02 | [数据模型设计](./02-数据模型设计.md) | Database/Collection/Field/Repository 等核心结构体定义、内置字段类型 |
 | 03 | [CEL校验设计](./03-CEL校验设计.md) | CEL-Go 环境配置、单字段/多字段联合校验、校验规则缓存、执行流程 |
-| 04 | [Yaegi二开设计](./04-Yaegi二开设计.md) | Yaegi 脚本引擎、CRUD钩子、自定义API、沙箱环境、Path规范、脚本示例 |
+| 04 | [Yaegi二开设计](./04-Yaegi二开设计.md) | Yaegi、CRUD 钩子、工作单元事务、自定义 API、沙箱 |
 | 05 | [API接口设计](./05-API接口设计.md) | HTTP 接口、与 NocoBase JS API 的对照、Filter 分期 |
 | 06 | [项目结构设计](./06-项目结构设计.md) | `gf init` 目录、`g.Meta` 路由、Controller/Service、系统表 DAO |
 | 07 | [MySQL集成设计](./07-MySQL集成设计.md) | Docker 本机 MySQL、类型映射、建表SQL、Schema同步、Filter到SQL翻译 |
@@ -118,7 +118,8 @@
 | Collection / Field / Index 管理 API | 已具备 | 保持 |
 | CEL 联合校验 | 已具备 | 保持 |
 | 关系 / appends / 关联 HTTP | 已具备（belongsTo/hasOne/hasMany/belongsToMany） | 保持 |
-| Yaegi | 已具备（钩子、自定义 API、沙箱导出、启动加载） | 保持 |
+| Yaegi | 已具备（钩子、自定义 API、沙箱导出、启动加载） | 钩子写业务表必须加入当前工作单元事务，见 [04](./04-Yaegi二开设计.md#43-crud-工作单元事务) |
+| 写入工作单元事务 | 未默认开启（主表与关联分句提交） | Create/Update/Destroy 默认一个事务：主表 + 关联 + Yaegi 改库 |
 | 特殊表、公式、加密、几何、序列 | 已具备语义增强 | 对象存储等后续另议 |
 
 ## API Path 规范
@@ -156,7 +157,7 @@ JS SDK 方法与 HTTP 的对应关系见 [05-API接口设计](./05-API接口设�
 
 ### 4. 第四阶段（Yaegi二开）
 - Yaegi 解释器初始化和沙箱
-- CRUD before/after 钩子执行
+- CRUD before/after 钩子执行（与主表、关联同一事务；外部副作用用 afterCommit）
 - 自定义 API 路由注册和执行
 - 脚本管理 API（增删改查、热加载）
 
