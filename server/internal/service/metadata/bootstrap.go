@@ -20,6 +20,7 @@ func OptionsFromConfig(ctx context.Context) DatabaseOptions {
 		AllowTruncate: g.Cfg().MustGet(ctx, "metadata.allowTruncate").Bool(),
 		Logging:       g.Cfg().MustGet(ctx, "metadata.logging").Bool(),
 		EncryptKey:    g.Cfg().MustGet(ctx, "metadata.encryptKey").String(),
+		StoragePath:   g.Cfg().MustGet(ctx, "metadata.storagePath").String(),
 	}
 }
 

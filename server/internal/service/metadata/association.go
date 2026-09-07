@@ -235,6 +235,92 @@ func (r *GenericRepository) loadBelongsToManyArray(ctx context.Context, records 
 	return nil
 }
 
+func (r *GenericRepository) applyRelationOnDelete(ctx context.Context, filter Filter) error {
+	ids, err := r.collectDestroyIDs(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	for _, f := range r.coll.Fields() {
+		if !isRelationField(f) {
+			continue
+		}
+		ro := GetRelationOptions(f)
+		onDelete := strings.ToUpper(strings.TrimSpace(ro.OnDelete))
+		if onDelete == "" {
+			onDelete = "SET NULL"
+		}
+		switch FieldType(f.Type()) {
+		case FieldTypeHasMany, FieldTypeHasOne:
+			target := r.coll.Db().Collection(ro.Target)
+			if target == nil {
+				continue
+			}
+			children, err := target.Repository().Find(ctx, &FindOptions{
+				CommonOptions: CommonOptions{Filter: Filter{ro.ForeignKey: Filter{"$in": ids}}},
+				PageSize:      MaxPageSize,
+			})
+			if err != nil {
+				return err
+			}
+			if len(children) == 0 {
+				continue
+			}
+			switch onDelete {
+			case "RESTRICT", "DENY":
+				return NewForbiddenError(fmt.Sprintf("存在关联记录，无法删除 %s", f.Name()))
+			case "CASCADE":
+				childIDs := make([]any, 0, len(children))
+				for _, ch := range children {
+					childIDs = append(childIDs, ch.Get(DefaultPrimaryKey))
+				}
+				if _, err := target.Repository().Destroy(ctx, &DestroyOptions{
+					CommonOptions: CommonOptions{Filter: Filter{DefaultPrimaryKey: Filter{"$in": childIDs}}},
+				}); err != nil {
+					return err
+				}
+			default: // SET NULL
+				for _, ch := range children {
+					if _, _, err := target.Repository().Update(ctx, &UpdateOptions{
+						FilterByTk: ch.Get(DefaultPrimaryKey),
+						Values:     map[string]any{ro.ForeignKey: nil},
+					}); err != nil {
+						return err
+					}
+				}
+			}
+		case FieldTypeBelongsToMany:
+			if ro.Through == "" {
+				continue
+			}
+			db := r.execDB(ctx)
+			for _, id := range ids {
+				if _, err := db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, quoteIdent(ro.Through), quoteIdent(ro.ForeignKey)), normalizeAssocID(id)); err != nil {
+					return NewSystemError(err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *GenericRepository) collectDestroyIDs(ctx context.Context, filter Filter) ([]any, error) {
+	recs, err := r.Find(ctx, &FindOptions{
+		CommonOptions: CommonOptions{Filter: filter, Fields: Fields{DefaultPrimaryKey}},
+		PageSize:      MaxPageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]any, 0, len(recs))
+	for _, rec := range recs {
+		ids = append(ids, rec.Get(DefaultPrimaryKey))
+	}
+	return ids, nil
+}
+
 func (r *GenericRepository) loadTreeChildren(ctx context.Context, records []*Record) error {
 	parentKey := "parent_id"
 	if opts := r.coll.Options(); opts != nil {
@@ -261,12 +347,38 @@ func (r *GenericRepository) loadTreeChildren(ctx context.Context, records []*Rec
 	for _, rec := range records {
 		key := cast.ToString(rec.Get(DefaultPrimaryKey))
 		if list, ok := grouped[key]; ok {
-			rec.Set("children", list)
+			rec.Set("children", nestTreeChildren(list, grouped, parentKey, DefaultPrimaryKey, 0))
 		} else {
 			rec.Set("children", []map[string]any{})
 		}
 	}
 	return nil
+}
+
+func nestTreeChildren(nodes []map[string]any, grouped map[string][]map[string]any, parentKey, idKey string, depth int) []map[string]any {
+	if depth >= 8 {
+		return nodes
+	}
+	out := make([]map[string]any, 0, len(nodes))
+	for _, node := range nodes {
+		child := cloneMap(node)
+		id := cast.ToString(child[idKey])
+		if list, ok := grouped[id]; ok {
+			child["children"] = nestTreeChildren(list, grouped, parentKey, idKey, depth+1)
+		} else {
+			child["children"] = []map[string]any{}
+		}
+		out = append(out, child)
+	}
+	return out
+}
+
+func cloneMap(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func toInterfaceSlice(raw any) []any {
@@ -361,7 +473,7 @@ func normalizeAssocID(v any) any {
 }
 
 // processAssociationWrites handles nested relation values on create/update.
-// Returns cleaned values (relation virtual keys removed; belongsTo FK set) and deferred association ops.
+// Maps without id are created on the target collection (NocoBase nested create).
 func (r *GenericRepository) processAssociationWrites(ctx context.Context, values map[string]any, isCreate bool) (map[string]any, map[string]any, error) {
 	assocPending := map[string]any{}
 	cleaned := make(map[string]any, len(values))
@@ -386,27 +498,114 @@ func (r *GenericRepository) processAssociationWrites(ctx context.Context, values
 				cleaned[name] = nil
 				continue
 			}
-			ids := extractAssociationIDs(val)
-			if len(ids) > 0 {
-				cleaned[name] = ids[0]
-			} else {
-				cleaned[name] = val
+			id, err := r.ensureAssociatedRecord(ctx, f, val)
+			if err != nil {
+				return nil, nil, err
+			}
+			fk := ro.ForeignKey
+			if fk == "" {
+				fk = name
+			}
+			cleaned[fk] = id
+			if fk != name {
+				cleaned[name] = id
 			}
 		case FieldTypeHasMany, FieldTypeHasOne, FieldTypeBelongsToMany:
 			delete(cleaned, name)
 			assocPending[name] = val
 		case FieldTypeBelongsToManyArray:
-			// keep as JSON array of ids
-			ids := extractAssociationIDs(val)
+			ids, err := r.materializeAssociationIDs(ctx, f, val)
+			if err != nil {
+				return nil, nil, err
+			}
 			if ids != nil {
 				cleaned[name] = ids
 			}
 		}
-		_ = ro
 		_ = isCreate
-		_ = ctx
 	}
 	return cleaned, assocPending, nil
+}
+
+func assocPayloadHasID(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return true
+	}
+	id, exists := m["id"]
+	return exists && !isEmptyValue(id)
+}
+
+func (r *GenericRepository) ensureAssociatedRecord(ctx context.Context, f Field, val any) (any, error) {
+	if val == nil {
+		return nil, nil
+	}
+	if m, ok := val.(map[string]any); ok {
+		if id, exists := m["id"]; exists && !isEmptyValue(id) {
+			return normalizeAssocID(id), nil
+		}
+		ro := GetRelationOptions(f)
+		target := r.coll.Db().Collection(ro.Target)
+		if target == nil {
+			return nil, fmt.Errorf("目标集合不存在: %s", ro.Target)
+		}
+		rec, err := target.Repository().Create(ctx, &CreateOptions{Values: m})
+		if err != nil {
+			return nil, err
+		}
+		return rec.Id(), nil
+	}
+	ids := extractAssociationIDs(val)
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("关联 %s 需要 id 或可创建的对象", f.Name())
+	}
+	return ids[0], nil
+}
+
+func (r *GenericRepository) materializeAssociationIDs(ctx context.Context, f Field, body any) ([]any, error) {
+	if body == nil {
+		return nil, nil
+	}
+	items := toAssocItemSlice(body)
+	if len(items) == 0 {
+		if assocPayloadHasID(body) {
+			return extractAssociationIDs(body), nil
+		}
+		id, err := r.ensureAssociatedRecord(ctx, f, body)
+		if err != nil {
+			return nil, err
+		}
+		if id == nil {
+			return nil, nil
+		}
+		return []any{id}, nil
+	}
+	var ids []any
+	for _, item := range items {
+		id, err := r.ensureAssociatedRecord(ctx, f, item)
+		if err != nil {
+			return nil, err
+		}
+		if id != nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+func toAssocItemSlice(body any) []any {
+	switch v := body.(type) {
+	case []any:
+		return v
+	case []map[string]any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = item
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func (r *GenericRepository) applyPendingAssociations(ctx context.Context, recordID any, pending map[string]any) error {
@@ -462,7 +661,10 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID any, as
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
 	}
-	ids := extractAssociationIDs(body)
+	ids, err := r.materializeAssociationIDs(ctx, f, body)
+	if err != nil {
+		return err
+	}
 	ro := GetRelationOptions(f)
 	switch FieldType(f.Type()) {
 	case FieldTypeBelongsTo:

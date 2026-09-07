@@ -2,12 +2,9 @@ package metadata
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"strings"
 
 	"github.com/gogf/gf/v2/errors/gerror"
-	"github.com/gogf/gf/v2/os/gtime"
 
 	v1 "itcodex/server/api/metadata/v1"
 	modelmd "itcodex/server/internal/model/metadata"
@@ -90,7 +87,7 @@ func (c *ControllerV1) CollectionUpdate(ctx context.Context, req *v1.CollectionU
 }
 
 func (c *ControllerV1) CollectionDelete(ctx context.Context, req *v1.CollectionDeleteReq) (res *v1.CollectionDeleteRes, err error) {
-	if err = c.db.DropCollection(ctx, req.CollectionName); err != nil {
+	if err = c.db.DropCollection(ctx, req.CollectionName, req.Cascade); err != nil {
 		return nil, wrapSvcErr(err)
 	}
 	return &v1.CollectionDeleteRes{}, nil
@@ -150,117 +147,69 @@ func (c *ControllerV1) FieldDelete(ctx context.Context, req *v1.FieldDeleteReq) 
 }
 
 func (c *ControllerV1) ScriptList(ctx context.Context, req *v1.ScriptListReq) (res *v1.ScriptListRes, err error) {
-	prefix := c.db.TablePrefix()
-	query := fmt.Sprintf(
-		`SELECT id, collection_name, name, hook_point, content, api_path, http_method, enabled, priority, options, created_at, updated_at FROM %s ORDER BY id DESC`,
-		md.QuoteIdent(prefix+"yaegi_scripts"),
-	)
-	rows, err := c.db.SqlDB().QueryContext(ctx, query)
+	scripts, err := c.db.ListScripts(ctx, req.Collection, req.Hook)
 	if err != nil {
 		return nil, wrapSvcErr(err)
-	}
-	defer rows.Close()
-
-	var scripts []*modelmd.YaegiScript
-	for rows.Next() {
-		var (
-			id             int64
-			collectionName sql.NullString
-			name           string
-			hookPoint      string
-			content        string
-			apiPath        sql.NullString
-			httpMethod     sql.NullString
-			enabled        bool
-			priority       int
-			options        sql.NullString
-			createdAt      sql.NullTime
-			updatedAt      sql.NullTime
-		)
-		if err = rows.Scan(&id, &collectionName, &name, &hookPoint, &content, &apiPath, &httpMethod, &enabled, &priority, &options, &createdAt, &updatedAt); err != nil {
-			return nil, wrapSvcErr(err)
-		}
-		s := &modelmd.YaegiScript{
-			Id:        id,
-			Name:      name,
-			HookPoint: hookPoint,
-			Content:   content,
-			Enabled:   enabled,
-			Priority:  priority,
-		}
-		if collectionName.Valid {
-			s.CollectionName = collectionName.String
-		}
-		if apiPath.Valid {
-			s.APIPath = apiPath.String
-		}
-		if httpMethod.Valid {
-			s.HTTPMethod = httpMethod.String
-		}
-		if options.Valid {
-			s.Options = options.String
-		}
-		if createdAt.Valid {
-			s.CreatedAt = gtime.New(createdAt.Time)
-		}
-		if updatedAt.Valid {
-			s.UpdatedAt = gtime.New(updatedAt.Time)
-		}
-		if req.Collection != "" && s.CollectionName != req.Collection {
-			continue
-		}
-		if req.Hook != "" && s.HookPoint != req.Hook {
-			continue
-		}
-		scripts = append(scripts, s)
 	}
 	return &v1.ScriptListRes{List: scripts}, nil
 }
 
-func (c *ControllerV1) ScriptSave(ctx context.Context, req *v1.ScriptSaveReq) (res *v1.ScriptSaveRes, err error) {
-	script := req.YaegiScript
-	now := gtime.Now()
-	script.UpdatedAt = now
-	if script.CreatedAt == nil {
-		script.CreatedAt = now
+func (c *ControllerV1) applyScriptRuntime(script *modelmd.YaegiScript) error {
+	if script == nil {
+		return nil
 	}
-	// 尊重请求中的 enabled；禁用请走 /disable 并卸载脚本
-
-	prefix := c.db.TablePrefix()
-	var result sql.Result
-	opts := script.Options
-	if opts == "" {
-		opts = "{}"
+	yaegi := c.db.Yaegi()
+	if yaegi == nil {
+		return nil
+	}
+	if script.Enabled {
+		if err := yaegi.LoadScript(script); err != nil {
+			return gerror.Wrap(err, "加载脚本失败")
+		}
+		return nil
 	}
 	if script.Id > 0 {
-		query := fmt.Sprintf(`UPDATE %s SET collection_name=?, name=?, hook_point=?, content=?, api_path=?, http_method=?, enabled=?, priority=?, options=?, updated_at=? WHERE id=?`, md.QuoteIdent(prefix+"yaegi_scripts"))
-		result, err = c.db.SqlDB().ExecContext(ctx, query, script.CollectionName, script.Name, script.HookPoint, script.Content, script.APIPath, script.HTTPMethod, script.Enabled, script.Priority, opts, now, script.Id)
-	} else {
-		query := fmt.Sprintf(`INSERT INTO %s (collection_name, name, hook_point, content, api_path, http_method, enabled, priority, options, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, md.QuoteIdent(prefix+"yaegi_scripts"))
-		result, err = c.db.SqlDB().ExecContext(ctx, query, script.CollectionName, script.Name, script.HookPoint, script.Content, script.APIPath, script.HTTPMethod, script.Enabled, script.Priority, opts, now, now)
-		if err == nil {
-			script.Id, _ = result.LastInsertId()
-		}
+		_ = yaegi.DisableScript(script.Id)
 	}
-	if err != nil {
+	return nil
+}
+
+func (c *ControllerV1) ScriptSave(ctx context.Context, req *v1.ScriptSaveReq) (res *v1.ScriptSaveRes, err error) {
+	script := req.YaegiScript
+	if err = c.db.SaveScript(ctx, &script); err != nil {
 		return nil, wrapSvcErr(err)
 	}
-	if yaegi := c.db.Yaegi(); yaegi != nil {
-		if script.Enabled {
-			if err = yaegi.LoadScript(&script); err != nil {
-				return nil, gerror.Wrap(err, "加载脚本失败")
-			}
-		} else if script.Id > 0 {
-			_ = yaegi.DisableScript(script.Id)
-		}
+	if err = c.applyScriptRuntime(&script); err != nil {
+		return nil, err
 	}
 	return &v1.ScriptSaveRes{YaegiScript: &script}, nil
 }
 
+func (c *ControllerV1) ScriptUpdate(ctx context.Context, req *v1.ScriptUpdateReq) (res *v1.ScriptUpdateRes, err error) {
+	script := req.YaegiScript
+	script.Id = req.Id
+	if err = c.db.SaveScript(ctx, &script); err != nil {
+		return nil, wrapSvcErr(err)
+	}
+	if err = c.applyScriptRuntime(&script); err != nil {
+		return nil, err
+	}
+	return &v1.ScriptUpdateRes{YaegiScript: &script}, nil
+}
+
+func (c *ControllerV1) ScriptToggle(ctx context.Context, req *v1.ScriptToggleReq) (res *v1.ScriptToggleRes, err error) {
+	script, err := c.db.ToggleScript(ctx, req.Id)
+	if err != nil {
+		return nil, wrapSvcErr(err)
+	}
+	if err = c.applyScriptRuntime(script); err != nil {
+		return nil, err
+	}
+	return &v1.ScriptToggleRes{YaegiScript: script}, nil
+}
+
 func (c *ControllerV1) ScriptDisable(ctx context.Context, req *v1.ScriptDisableReq) (res *v1.ScriptDisableRes, err error) {
-	prefix := c.db.TablePrefix()
-	query := fmt.Sprintf(`UPDATE %s SET enabled=0, updated_at=? WHERE id=?`, md.QuoteIdent(prefix+"yaegi_scripts"))
-	if _, err = c.db.SqlDB().ExecContext(ctx, query, gtime.Now(), req.Id); err != nil {
+	if err = c.db.SetScriptEnabled(ctx, req.Id, false); err != nil {
 		return nil, wrapSvcErr(err)
 	}
 	if yaegi := c.db.Yaegi(); yaegi != nil {
@@ -272,12 +221,10 @@ func (c *ControllerV1) ScriptDisable(ctx context.Context, req *v1.ScriptDisableR
 }
 
 func (c *ControllerV1) ScriptDelete(ctx context.Context, req *v1.ScriptDeleteReq) (res *v1.ScriptDeleteRes, err error) {
-	prefix := c.db.TablePrefix()
 	if yaegi := c.db.Yaegi(); yaegi != nil {
 		_ = yaegi.DisableScript(req.Id)
 	}
-	query := fmt.Sprintf(`DELETE FROM %s WHERE id=?`, md.QuoteIdent(prefix+"yaegi_scripts"))
-	if _, err = c.db.SqlDB().ExecContext(ctx, query, req.Id); err != nil {
+	if err = c.db.DeleteScript(ctx, req.Id); err != nil {
 		return nil, wrapSvcErr(err)
 	}
 	return &v1.ScriptDeleteRes{}, nil

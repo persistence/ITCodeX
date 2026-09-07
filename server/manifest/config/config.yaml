@@ -30,3 +30,4 @@ metadata:
   allowTruncate: false
   logging: true
   encryptKey: "itcodex-default-encrypt-key"
+  storagePath: "./manifest/storage"

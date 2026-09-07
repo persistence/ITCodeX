@@ -102,7 +102,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any, p
 		apiErr := &APIError{
 			Code:    resp.StatusCode,
 			Message: toString(apiResp["message"]),
-			Data:    apiResp["errors"],
+			Data:    apiResp["data"],
+		}
+		if codeNum := asInt64(apiResp["code"]); codeNum != 0 {
+			apiErr.Code = int(codeNum)
 		}
 		if apiErr.Message == "" {
 			apiErr.Message = string(respBody)
@@ -116,7 +119,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any, p
 		return nil, &APIError{
 			Code:    int(codeNum),
 			Message: toString(apiResp["message"]),
-			Data:    apiResp["errors"],
+			Data:    apiResp["data"],
 		}
 	}
 

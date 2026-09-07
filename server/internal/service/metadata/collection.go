@@ -167,10 +167,8 @@ func (c *Collection) AddField(ctx context.Context, input CreateFieldInput) error
 
 	if c.db != nil && !c.isNew {
 		optionsJson, _ := json.Marshal(opts)
-		query := fmt.Sprintf(`INSERT INTO %s (collection_name, name, type, display_name, is_required, is_unique, is_indexed, options, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, quoteIdent(c.db.TablePrefix()+"fields"))
-		_, err := c.db.db.Exec(ctx, query, c.name, input.Name, string(input.Type), input.DisplayName, input.IsRequired, input.IsUnique, input.IsIndexed, string(optionsJson), input.Sort)
-		if err != nil {
-			return NewSystemError(err)
+		if err := c.db.insertFieldRow(ctx, c.name, input.Name, string(input.Type), input.DisplayName, input.IsRequired, input.IsUnique, input.IsIndexed, string(optionsJson), input.Sort); err != nil {
+			return err
 		}
 	}
 
@@ -222,10 +220,8 @@ func (c *Collection) RemoveField(ctx context.Context, name string) error {
 	}
 
 	if c.db != nil && !c.isNew {
-		query := fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ? AND name = ?`, quoteIdent(c.db.TablePrefix()+"fields"))
-		_, err := c.db.db.Exec(ctx, query, c.name, name)
-		if err != nil {
-			return NewSystemError(err)
+		if err := c.db.deleteFieldRow(ctx, c.name, name); err != nil {
+			return err
 		}
 	}
 
@@ -289,16 +285,7 @@ func (c *Collection) persistIndex(ctx context.Context, index *Index) error {
 		return nil
 	}
 	fieldsJson, _ := json.Marshal(index.Fields)
-	query := fmt.Sprintf(
-		`INSERT INTO %s (collection_name, name, fields, %s) VALUES (?, ?, ?, ?)`,
-		quoteIdent(c.db.TablePrefix()+"indexes"),
-		quoteIdent("unique"),
-	)
-	_, err := c.db.db.Exec(ctx, query, c.name, index.Name, string(fieldsJson), index.Unique)
-	if err != nil {
-		return NewSystemError(err)
-	}
-	return nil
+	return c.db.insertIndexRow(ctx, c.name, index.Name, string(fieldsJson), index.Unique)
 }
 
 func (c *Collection) RemoveIndex(ctx context.Context, fields []string) error {
@@ -312,9 +299,8 @@ func (c *Collection) RemoveIndex(ctx context.Context, fields []string) error {
 				if err != nil {
 					return NewSystemError(err)
 				}
-				del := fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ? AND name = ?`, quoteIdent(c.db.TablePrefix()+"indexes"))
-				if _, err := c.db.db.Exec(ctx, del, c.name, idx.Name); err != nil {
-					return NewSystemError(err)
+				if err := c.db.deleteIndexRow(ctx, c.name, idx.Name); err != nil {
+					return err
 				}
 			}
 			c.indexes = append(c.indexes[:i], c.indexes[i+1:]...)
@@ -387,9 +373,8 @@ func (c *Collection) UpdateMeta(ctx context.Context, input UpdateCollectionInput
 
 	if c.db != nil && !c.isNew {
 		optionsJson, _ := json.Marshal(c.opts)
-		query := fmt.Sprintf(`UPDATE %s SET display_name = ?, options = ? WHERE name = ?`, quoteIdent(c.db.TablePrefix()+"collections"))
-		if _, err := c.db.db.Exec(ctx, query, c.displayName, string(optionsJson), c.name); err != nil {
-			return NewSystemError(err)
+		if err := c.db.updateCollectionRow(ctx, c.name, c.displayName, string(optionsJson)); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -439,9 +424,8 @@ func (c *Collection) UpdateField(ctx context.Context, name string, input UpdateF
 	if c.db != nil && !c.isNew {
 		optionsJson, _ := json.Marshal(opts)
 		displayName := replaced.DisplayName()
-		query := fmt.Sprintf(`UPDATE %s SET display_name = ?, is_required = ?, is_unique = ?, is_indexed = ?, options = ? WHERE collection_name = ? AND name = ?`, quoteIdent(c.db.TablePrefix()+"fields"))
-		if _, err := c.db.db.Exec(ctx, query, displayName, replaced.IsRequired(), replaced.IsUnique(), replaced.IsIndexed(), string(optionsJson), c.name, name); err != nil {
-			return NewSystemError(err)
+		if err := c.db.updateFieldRow(ctx, c.name, name, displayName, replaced.IsRequired(), replaced.IsUnique(), replaced.IsIndexed(), string(optionsJson)); err != nil {
+			return err
 		}
 	}
 	return nil

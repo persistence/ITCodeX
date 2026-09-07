@@ -37,6 +37,15 @@ func (c *Client) List(ctx context.Context, collection string, opts *FindOptions)
 		if opts.PageSize > 0 {
 			params["pageSize"] = strconv.Itoa(opts.PageSize)
 		}
+		if opts.Start != "" {
+			params["start"] = opts.Start
+		}
+		if opts.End != "" {
+			params["end"] = opts.End
+		}
+		if opts.TargetID != "" {
+			params["targetId"] = opts.TargetID
+		}
 	}
 
 	resp, err := c.get(ctx, fmt.Sprintf("/api/c/%s", url.PathEscape(collection)), params)
@@ -117,16 +126,31 @@ func (c *Client) CreateMany(ctx context.Context, collection string, records []ma
 }
 
 func (c *Client) Update(ctx context.Context, collection, id string, data map[string]any) (map[string]any, error) {
-	resp, err := c.put(ctx, fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), data)
+	return c.UpdateWithOptions(ctx, collection, id, data, nil)
+}
+
+func (c *Client) UpdateWithOptions(ctx context.Context, collection, id string, data map[string]any, opts *UpdateOptions) (map[string]any, error) {
+	params := map[string]string{}
+	if opts != nil {
+		if len(opts.Whitelist) > 0 {
+			params["whitelist"] = joinStrings(opts.Whitelist, ",")
+		}
+		if len(opts.Blacklist) > 0 {
+			params["blacklist"] = joinStrings(opts.Blacklist, ",")
+		}
+	}
+	resp, err := c.doRequest(ctx, "PUT", fmt.Sprintf("/api/c/%s/%s", url.PathEscape(collection), url.PathEscape(id)), data, params)
 	if err != nil {
 		return nil, err
 	}
 	m, _ := resp.(map[string]any)
 	switch v := m["data"].(type) {
 	case map[string]any:
+		if rec, ok := v["record"].(map[string]any); ok {
+			return rec, nil
+		}
 		return v, nil
 	default:
-		// some update handlers return {affected:n}
 		return map[string]any{"affected": asInt64(v)}, nil
 	}
 }

@@ -57,6 +57,7 @@ type CreateFieldInput struct {
 	Through      string `json:"through,omitempty"`
 	OtherKey     string `json:"otherKey,omitempty"`
 	TargetKey    string `json:"targetKey,omitempty"`
+	OnDelete     string `json:"onDelete,omitempty"`
 	Expression   string `json:"expression,omitempty"`
 	Pattern      string `json:"pattern,omitempty"`
 	AutoGenerate bool   `json:"autoGenerate,omitempty"`
@@ -86,12 +87,21 @@ type FindOptions struct {
 	Appends  []string
 	Page     int
 	PageSize int
+	// 特殊表查询增强
+	Start    string // calendar: start bound
+	End      string // calendar: end bound
+	TargetID string // comment: targetId
 }
 
 type FindOneOptions struct {
 	Fields  []string
 	Except  []string
 	Appends []string
+}
+
+type UpdateOptions struct {
+	Whitelist []string
+	Blacklist []string
 }
 
 type ListResult struct {

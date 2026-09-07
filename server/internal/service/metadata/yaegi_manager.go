@@ -262,6 +262,66 @@ func (m *DefaultYaegiManager) ExecuteAfterCommit(ctx context.Context, coll *Coll
 	return err
 }
 
+func (m *DefaultYaegiManager) ExecuteBeforeValidate(ctx context.Context, coll *Collection, data map[string]any) (result map[string]any, err error) {
+	result = data
+	hooks := m.getHooks(coll.Name(), HookPointBeforeValidate)
+	for _, inst := range hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("script panic: %v", r)
+				}
+			}()
+			if err != nil {
+				return
+			}
+			fn, ok := inst.hooks[HookPointBeforeValidate]
+			if !ok || !fn.IsValid() {
+				return
+			}
+			args := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(result)}
+			returns := fn.Call(args)
+			if len(returns) >= 2 {
+				if newData, ok := returns[0].Interface().(map[string]any); ok && newData != nil {
+					result = newData
+				}
+				if hookErr, ok := returns[1].Interface().(error); ok && hookErr != nil {
+					err = hookErr
+				}
+			}
+		}()
+	}
+	return result, err
+}
+
+func (m *DefaultYaegiManager) ExecuteAfterValidate(ctx context.Context, coll *Collection, data map[string]any) (err error) {
+	hooks := m.getHooks(coll.Name(), HookPointAfterValidate)
+	for _, inst := range hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("script panic: %v", r)
+				}
+			}()
+			if err != nil {
+				return
+			}
+			fn, ok := inst.hooks[HookPointAfterValidate]
+			if !ok || !fn.IsValid() {
+				return
+			}
+			args := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(data)}
+			returns := fn.Call(args)
+			if len(returns) > 0 {
+				if hookErr, ok := returns[0].Interface().(error); ok && hookErr != nil {
+					err = hookErr
+				}
+			}
+		}()
+	}
+	return err
+}
+
 func (m *DefaultYaegiManager) ExecuteBeforeUpdate(ctx context.Context, coll *Collection, data map[string]any, filter Filter) (result map[string]any, err error) {
 	result = data
 	hooks := m.getHooks(coll.Name(), HookPointBeforeUpdate)
@@ -423,6 +483,8 @@ func (m *DefaultYaegiManager) compileScript(script *modelmd.YaegiScript) (*Yaegi
 	}
 
 	hookPoints := []HookPoint{
+		HookPointBeforeValidate,
+		HookPointAfterValidate,
 		HookPointBeforeCreate,
 		HookPointAfterCreate,
 		HookPointBeforeUpdate,

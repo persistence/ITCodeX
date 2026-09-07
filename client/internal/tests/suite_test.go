@@ -58,7 +58,7 @@ func (s *TestSuite) createTestCollection(t *testing.T, name string, fields ...cl
 	require.NotNil(t, coll)
 
 	t.Cleanup(func() {
-		_ = s.client.DropCollection(s.ctx, name)
+		_ = s.client.DropCollectionCascade(s.ctx, name, true)
 	})
 
 	return coll
@@ -75,7 +75,7 @@ func (s *TestSuite) createSpecialCollection(t *testing.T, name, typ string, fiel
 	coll, err := s.client.CreateCollection(s.ctx, input)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_ = s.client.DropCollection(s.ctx, name)
+		_ = s.client.DropCollectionCascade(s.ctx, name, true)
 	})
 	return coll
 }

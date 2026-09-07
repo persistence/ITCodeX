@@ -14,6 +14,7 @@ type RelationOptions struct {
 	Through    string
 	OtherKey   string
 	TargetKey  string
+	OnDelete   string
 }
 
 func relationOptsFromMap(opts map[string]any, fieldName string, typ FieldType) RelationOptions {
@@ -41,6 +42,9 @@ func relationOptsFromMap(opts map[string]any, fieldName string, typ FieldType) R
 	}
 	if v, ok := opts["targetKey"].(string); ok && v != "" {
 		ro.TargetKey = v
+	}
+	if v, ok := opts["onDelete"].(string); ok && v != "" {
+		ro.OnDelete = strings.ToUpper(v)
 	}
 	switch typ {
 	case FieldTypeBelongsTo:
@@ -107,6 +111,9 @@ func attachRelationInput(opts map[string]any, input CreateFieldInput) {
 	}
 	if input.TargetCollection != "" {
 		opts["targetCollection"] = input.TargetCollection
+	}
+	if input.OnDelete != "" {
+		opts["onDelete"] = input.OnDelete
 	}
 }
 

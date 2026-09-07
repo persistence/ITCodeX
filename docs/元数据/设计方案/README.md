@@ -112,15 +112,15 @@
 
 | 能力 | 当前代码 | 目标 |
 |------|----------|------|
-| MySQL 连接与系统表 sync | 已具备（`database/sql` + 差量 ADD COLUMN） | 系统表迁到 `g.DB()` + dao/do（后续） |
-| 工程结构 | `service` + `g.Meta` + `internal/cmd` | 保持 |
+| MySQL 连接与系统表 sync | 已具备：默认前缀 `c_` 走 `g.DB()` + dao/do；`manifest/sql/metadata_system.sql` | 保持 |
+| 工程结构 | `service` + `g.Meta` + `internal/cmd` + `internal/dao` | 保持 |
 | 普通表 CRUD + 基础 Filter | 已具备（含 `$empty/$notEmpty/$includes`） | 保持 |
-| Collection / Field / Index 管理 API | 已具备 | 保持 |
+| Collection / Field / Index 管理 API | 已具备（删除支持 `cascade`） | 保持 |
 | CEL 联合校验 | 已具备 | 保持 |
-| 关系 / appends / 关联 HTTP | 已具备（belongsTo/hasOne/hasMany/belongsToMany） | 保持 |
-| Yaegi | 已具备（钩子、自定义 API、沙箱导出、启动加载） | 钩子写业务表必须加入当前工作单元事务，见 [04](./04-Yaegi二开设计.md#43-crud-工作单元事务) |
-| 写入工作单元事务 | 未默认开启（主表与关联分句提交） | Create/Update/Destroy 默认一个事务：主表 + 关联 + Yaegi 改库 |
-| 特殊表、公式、加密、几何、序列 | 已具备语义增强 | 对象存储等后续另议 |
+| 关系 / appends / 关联 HTTP | 已具备：嵌套创建、多层 Filter、`onDelete` 级联 | 保持 |
+| Yaegi | 已具备：validate 钩子、工作单元、沙箱 Repository / validation / utils | 保持 |
+| 写入工作单元事务 | Create/Update/Destroy 默认一个事务：主表 + 关联 + Yaegi 改库 | 保持 |
+| 特殊表、公式、加密、几何、序列 | 语义增强 + 本地文件存储（`POST /api/c/:collection/upload`） | 云对象存储另议 |
 
 ## API Path 规范
 

@@ -334,8 +334,15 @@ func (r *GenericRepository) applyAutoFields(values map[string]any) error {
 			values[name] = val
 		case FieldTypeSort:
 			if _, ok := values[name]; !ok || isEmptyValue(values[name]) {
-				// default to max+1 simplified: use timestamp seconds
-				values[name] = int(time.Now().Unix() % 100000000)
+				next := int(time.Now().Unix() % 100000000)
+				if db := r.execDB(context.Background()); db != nil {
+					var max sql.NullInt64
+					q := fmt.Sprintf(`SELECT MAX(%s) FROM %s`, quoteIdent(name), quoteIdent(r.coll.TableName()))
+					if err := db.QueryRow(context.Background(), q).Scan(&max); err == nil && max.Valid {
+						next = int(max.Int64) + 1
+					}
+				}
+				values[name] = next
 			}
 		}
 	}
@@ -377,7 +384,14 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 		return nil, err
 	}
 
-	// Run validation
+	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
+		var err error
+		values, err = yaegi.ExecuteBeforeValidate(ctx, r.coll, values)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if v := r.coll.Db().Validator(); v != nil {
 		if err := v.ValidateRecord(ctx, r.coll, values, nil, false); err != nil {
 			return nil, err
@@ -385,6 +399,9 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 	}
 
 	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
+		if err := yaegi.ExecuteAfterValidate(ctx, r.coll, values); err != nil {
+			return nil, err
+		}
 		var err error
 		values, err = yaegi.ExecuteBeforeCreate(ctx, r.coll, values)
 		if err != nil {
@@ -719,7 +736,14 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 		}
 	}
 
-	// Run validation for update
+	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
+		var err error
+		values, err = yaegi.ExecuteBeforeValidate(ctx, r.coll, values)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
 	if v := r.coll.Db().Validator(); v != nil {
 		if err := v.ValidateRecord(ctx, r.coll, values, oldData, true); err != nil {
 			return nil, 0, err
@@ -727,6 +751,9 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 	}
 
 	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
+		if err := yaegi.ExecuteAfterValidate(ctx, r.coll, values); err != nil {
+			return nil, 0, err
+		}
 		var err error
 		values, err = yaegi.ExecuteBeforeUpdate(ctx, r.coll, values, filter)
 		if err != nil {
@@ -860,6 +887,10 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 
 	if opts.FilterByTk != nil {
 		filter[DefaultPrimaryKey] = opts.FilterByTk
+	}
+
+	if err := r.applyRelationOnDelete(ctx, filter); err != nil {
+		return 0, err
 	}
 
 	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {

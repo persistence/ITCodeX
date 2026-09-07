@@ -30,6 +30,7 @@ type DatabaseOptions struct {
 	ScriptsPath   string `json:"scriptsPath,omitempty"`
 	AllowTruncate bool   `json:"allowTruncate,omitempty"`
 	EncryptKey    string `json:"encryptKey,omitempty"`
+	StoragePath   string `json:"storagePath,omitempty"`
 }
 
 type CollectionOptions struct {
@@ -102,6 +103,7 @@ type CreateFieldInput struct {
 	IncrementBy      int                    `json:"incrementBy,omitempty"`
 	Algorithm        string                 `json:"algorithm,omitempty"`
 	TargetCollection string                 `json:"targetCollection,omitempty"`
+	OnDelete         string                 `json:"onDelete,omitempty"`
 }
 
 type FieldValidationConfig struct {

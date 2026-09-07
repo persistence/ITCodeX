@@ -46,6 +46,7 @@ type CollectionUpdateRes struct {
 type CollectionDeleteReq struct {
 	g.Meta         `path:"/collections/{collectionName}" method:"delete" tags:"Meta" summary:"删除 Collection"`
 	CollectionName string `json:"collectionName" p:"collectionName" v:"required"`
+	Cascade        bool   `json:"cascade" p:"cascade"`
 }
 type CollectionDeleteRes struct{}
 

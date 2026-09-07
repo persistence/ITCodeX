@@ -95,7 +95,7 @@ func buildNotCondition(coll *Collection, value any, params *[]any) (string, erro
 }
 
 func buildFieldCondition(columnName string, value any, params *[]any, coll *Collection) (string, error) {
-	// Association filter: posts.title -> EXISTS subquery (one level)
+	// Association filter: posts.title or posts.comments.title (nested EXISTS)
 	if coll != nil && strings.Contains(columnName, ".") {
 		parts := strings.SplitN(columnName, ".", 2)
 		assocName, targetCol := parts[0], parts[1]
@@ -124,14 +124,18 @@ func buildAssociationFilter(coll *Collection, f Field, targetCol string, value a
 	}
 	var inner string
 	var err error
-	switch v := value.(type) {
-	case Filter:
-		inner, err = buildOperatorCondition(targetCol, v, params)
-	case map[string]any:
-		inner, err = buildOperatorCondition(targetCol, Filter(v), params)
-	default:
-		opFn, _ := GetOperator("$eq")
-		inner, err = opFn(targetCol, value, params)
+	if strings.Contains(targetCol, ".") {
+		inner, err = buildFieldCondition(targetCol, value, params, target)
+	} else {
+		switch v := value.(type) {
+		case Filter:
+			inner, err = buildOperatorCondition(targetCol, v, params)
+		case map[string]any:
+			inner, err = buildOperatorCondition(targetCol, Filter(v), params)
+		default:
+			opFn, _ := GetOperator("$eq")
+			inner, err = opFn(targetCol, value, params)
+		}
 	}
 	if err != nil {
 		return "", err

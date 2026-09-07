@@ -11,6 +11,8 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
+	"itcodex/server/internal/dao"
+	"itcodex/server/internal/model/entity"
 	modelmd "itcodex/server/internal/model/metadata"
 	"itcodex/server/pkg/utils"
 	yaegictx "itcodex/server/pkg/yaegi/context"
@@ -66,6 +68,8 @@ type YaegiManager interface {
 	ExecuteBeforeDelete(ctx context.Context, coll *Collection, filter Filter) error
 	ExecuteAfterDelete(ctx context.Context, coll *Collection, affected int) error
 	ExecuteAfterCommit(ctx context.Context, coll *Collection, record *Record) error
+	ExecuteBeforeValidate(ctx context.Context, coll *Collection, data map[string]any) (map[string]any, error)
+	ExecuteAfterValidate(ctx context.Context, coll *Collection, data map[string]any) error
 	ExecuteCustomAPI(script *modelmd.YaegiScript, ctx *yaegictx.YaegiHTTPContext) error
 	ValidateScript(content string) error
 	ExecuteAfterFind(ctx context.Context, coll *Collection, records []*Record) error
@@ -230,38 +234,56 @@ func (d *Database) createSystemTables(ctx context.Context) error {
 }
 
 func (d *Database) loadCollections(ctx context.Context) error {
-	prefix := d.TablePrefix()
-	query := fmt.Sprintf(`SELECT id, name, display_name, type, options, created_at, updated_at FROM %s`, quoteIdent(prefix+"collections"))
-	rows, err := d.db.Query(ctx, query)
-	if err != nil {
-		return NewSystemError(err)
-	}
-	defer rows.Close()
-
 	var collections []*modelmd.Collection
-	for rows.Next() {
-		var (
-			id          int64
-			name        string
-			displayName string
-			typ         string
-			options     sql.NullString
-			createdAt   sql.NullTime
-			updatedAt   sql.NullTime
-		)
-		if err := rows.Scan(&id, &name, &displayName, &typ, &options, &createdAt, &updatedAt); err != nil {
+	if d.useSystemDAO() {
+		var rows []entity.Collections
+		if err := dao.Collections.Ctx(ctx).Scan(&rows); err != nil {
 			return NewSystemError(err)
 		}
-		m := &modelmd.Collection{
-			Id:          id,
-			Name:        name,
-			DisplayName: displayName,
-			Type:        typ,
+		for _, row := range rows {
+			collections = append(collections, &modelmd.Collection{
+				Id:          row.Id,
+				Name:        row.Name,
+				DisplayName: row.DisplayName,
+				Type:        row.Type,
+				Options:     row.Options,
+				CreatedAt:   row.CreatedAt,
+				UpdatedAt:   row.UpdatedAt,
+			})
 		}
-		if options.Valid {
-			m.Options = options.String
+	} else {
+		prefix := d.TablePrefix()
+		query := fmt.Sprintf(`SELECT id, name, display_name, type, options, created_at, updated_at FROM %s`, quoteIdent(prefix+"collections"))
+		rows, err := d.db.Query(ctx, query)
+		if err != nil {
+			return NewSystemError(err)
 		}
-		collections = append(collections, m)
+		defer rows.Close()
+
+		for rows.Next() {
+			var (
+				id          int64
+				name        string
+				displayName string
+				typ         string
+				options     sql.NullString
+				createdAt   sql.NullTime
+				updatedAt   sql.NullTime
+			)
+			if err := rows.Scan(&id, &name, &displayName, &typ, &options, &createdAt, &updatedAt); err != nil {
+				return NewSystemError(err)
+			}
+			m := &modelmd.Collection{
+				Id:          id,
+				Name:        name,
+				DisplayName: displayName,
+				Type:        typ,
+			}
+			if options.Valid {
+				m.Options = options.String
+			}
+			collections = append(collections, m)
+		}
 	}
 
 	d.mu.Lock()
@@ -279,14 +301,6 @@ func (d *Database) loadCollections(ctx context.Context) error {
 }
 
 func (d *Database) loadFields(ctx context.Context) error {
-	prefix := d.TablePrefix()
-	query := fmt.Sprintf(`SELECT id, collection_name, name, type, display_name, is_required, is_unique, is_indexed, validation, options, sort FROM %s ORDER BY sort ASC, id ASC`, quoteIdent(prefix+"fields"))
-	rows, err := d.db.Query(ctx, query)
-	if err != nil {
-		return NewSystemError(err)
-	}
-	defer rows.Close()
-
 	type fieldModel struct {
 		Id             int64
 		CollectionName string
@@ -302,12 +316,47 @@ func (d *Database) loadFields(ctx context.Context) error {
 	}
 
 	var fieldModels []*fieldModel
-	for rows.Next() {
-		var fm fieldModel
-		if err := rows.Scan(&fm.Id, &fm.CollectionName, &fm.Name, &fm.Type, &fm.DisplayName, &fm.IsRequired, &fm.IsUnique, &fm.IsIndexed, &fm.Validation, &fm.Options, &fm.Sort); err != nil {
+	if d.useSystemDAO() {
+		var rows []entity.Fields
+		if err := dao.Fields.Ctx(ctx).OrderAsc(dao.Fields.Columns().Sort).OrderAsc(dao.Fields.Columns().Id).Scan(&rows); err != nil {
 			return NewSystemError(err)
 		}
-		fieldModels = append(fieldModels, &fm)
+		for _, row := range rows {
+			fm := &fieldModel{
+				Id:             row.Id,
+				CollectionName: row.CollectionName,
+				Name:           row.Name,
+				Type:           row.Type,
+				DisplayName:    row.DisplayName,
+				IsRequired:     row.IsRequired != 0,
+				IsUnique:       row.IsUnique != 0,
+				IsIndexed:      row.IsIndexed != 0,
+				Sort:           row.Sort,
+			}
+			if row.Validation != "" {
+				fm.Validation = sql.NullString{String: row.Validation, Valid: true}
+			}
+			if row.Options != "" {
+				fm.Options = sql.NullString{String: row.Options, Valid: true}
+			}
+			fieldModels = append(fieldModels, fm)
+		}
+	} else {
+		prefix := d.TablePrefix()
+		query := fmt.Sprintf(`SELECT id, collection_name, name, type, display_name, is_required, is_unique, is_indexed, validation, options, sort FROM %s ORDER BY sort ASC, id ASC`, quoteIdent(prefix+"fields"))
+		rows, err := d.db.Query(ctx, query)
+		if err != nil {
+			return NewSystemError(err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var fm fieldModel
+			if err := rows.Scan(&fm.Id, &fm.CollectionName, &fm.Name, &fm.Type, &fm.DisplayName, &fm.IsRequired, &fm.IsUnique, &fm.IsIndexed, &fm.Validation, &fm.Options, &fm.Sort); err != nil {
+				return NewSystemError(err)
+			}
+			fieldModels = append(fieldModels, &fm)
+		}
 	}
 
 	d.mu.Lock()
@@ -343,45 +392,60 @@ func (d *Database) loadFields(ctx context.Context) error {
 }
 
 func (d *Database) loadIndexes(ctx context.Context) error {
-	prefix := d.TablePrefix()
-	query := fmt.Sprintf(
-		`SELECT id, collection_name, name, fields, %s FROM %s`,
-		quoteIdent("unique"),
-		quoteIdent(prefix+"indexes"),
-	)
-	rows, err := d.db.Query(ctx, query)
-	if err != nil {
-		return NewSystemError(err)
+	type indexRow struct {
+		id             int64
+		collectionName string
+		name           string
+		fieldsJson     string
+		unique         bool
 	}
-	defer rows.Close()
+	var list []indexRow
+	if d.useSystemDAO() {
+		var rows []entity.Indexes
+		if err := dao.Indexes.Ctx(ctx).Scan(&rows); err != nil {
+			return NewSystemError(err)
+		}
+		for _, row := range rows {
+			list = append(list, indexRow{row.Id, row.CollectionName, row.Name, row.Fields, row.Unique != 0})
+		}
+	} else {
+		prefix := d.TablePrefix()
+		query := fmt.Sprintf(
+			`SELECT id, collection_name, name, fields, %s FROM %s`,
+			quoteIdent("unique"),
+			quoteIdent(prefix+"indexes"),
+		)
+		rows, err := d.db.Query(ctx, query)
+		if err != nil {
+			return NewSystemError(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item indexRow
+			if err := rows.Scan(&item.id, &item.collectionName, &item.name, &item.fieldsJson, &item.unique); err != nil {
+				return NewSystemError(err)
+			}
+			list = append(list, item)
+		}
+	}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for rows.Next() {
-		var (
-			id             int64
-			collectionName string
-			name           string
-			fieldsJson     string
-			unique         bool
-		)
-		if err := rows.Scan(&id, &collectionName, &name, &fieldsJson, &unique); err != nil {
-			return NewSystemError(err)
-		}
-		coll, ok := d.collections[collectionName]
+	for _, item := range list {
+		coll, ok := d.collections[item.collectionName]
 		if !ok {
 			continue
 		}
 		var fields []string
-		if err := json.Unmarshal([]byte(fieldsJson), &fields); err != nil {
+		if err := json.Unmarshal([]byte(item.fieldsJson), &fields); err != nil {
 			continue
 		}
 		coll.indexes = append(coll.indexes, &Index{
-			ID:     id,
-			Name:   name,
+			ID:     item.id,
+			Name:   item.name,
 			Fields: fields,
-			Unique: unique,
+			Unique: item.unique,
 		})
 	}
 	return nil
@@ -391,52 +455,13 @@ func (d *Database) loadEnabledScripts(ctx context.Context) error {
 	if d.yaegi == nil {
 		return nil
 	}
-	prefix := d.TablePrefix()
-	query := fmt.Sprintf(
-		`SELECT id, collection_name, name, hook_point, content, api_path, http_method, enabled, priority, options FROM %s WHERE enabled = 1 ORDER BY priority ASC, id ASC`,
-		quoteIdent(prefix+"yaegi_scripts"),
-	)
-	rows, err := d.db.Query(ctx, query)
+	scripts, err := d.listScripts(ctx, "", "")
 	if err != nil {
-		return NewSystemError(err)
+		return err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var (
-			id             int64
-			collectionName sql.NullString
-			name           string
-			hookPoint      string
-			content        string
-			apiPath        sql.NullString
-			httpMethod     sql.NullString
-			enabled        bool
-			priority       int
-			options        sql.NullString
-		)
-		if err := rows.Scan(&id, &collectionName, &name, &hookPoint, &content, &apiPath, &httpMethod, &enabled, &priority, &options); err != nil {
-			return NewSystemError(err)
-		}
-		script := &modelmd.YaegiScript{
-			Id:        id,
-			Name:      name,
-			HookPoint: hookPoint,
-			Content:   content,
-			Enabled:   enabled,
-			Priority:  priority,
-		}
-		if collectionName.Valid {
-			script.CollectionName = collectionName.String
-		}
-		if apiPath.Valid {
-			script.APIPath = apiPath.String
-		}
-		if httpMethod.Valid {
-			script.HTTPMethod = httpMethod.String
-		}
-		if options.Valid {
-			script.Options = options.String
+	for _, script := range scripts {
+		if script == nil || !script.Enabled {
+			continue
 		}
 		if err := d.yaegi.LoadScript(script); err != nil {
 			return err
@@ -557,6 +582,7 @@ func applySpecialCollectionDefaults(coll *Collection, typ CollectionType) {
 		injectDefaultField(coll, "url", "URL", FieldTypeUrl)
 		injectDefaultField(coll, "mime", "MIME", FieldTypeString)
 		injectDefaultField(coll, "size", "大小", FieldTypeInteger)
+		injectDefaultField(coll, "path", "存储路径", FieldTypeString)
 	}
 }
 
@@ -680,20 +706,15 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 	}
 
 	optionsJson, _ := json.Marshal(coll.opts)
-	prefix := d.TablePrefix()
-	_, err := d.db.Exec(ctx, fmt.Sprintf(`INSERT INTO %s (name, display_name, type, options) VALUES (?, ?, ?, ?)`, quoteIdent(prefix+"collections")),
-		coll.name, coll.displayName, string(coll.type_), string(optionsJson))
-	if err != nil {
-		return nil, NewSystemError(err)
+	if err := d.insertCollectionRow(ctx, coll.name, coll.displayName, string(coll.type_), string(optionsJson)); err != nil {
+		return nil, err
 	}
 
 	for _, f := range coll.Fields() {
 		fOpts := f.Options()
 		optsJson, _ := json.Marshal(fOpts)
-		_, err := d.db.Exec(ctx, fmt.Sprintf(`INSERT INTO %s (collection_name, name, type, display_name, is_required, is_unique, is_indexed, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, quoteIdent(prefix+"fields")),
-			coll.name, f.Name(), f.Type(), f.DisplayName(), f.IsRequired(), f.IsUnique(), f.IsIndexed(), string(optsJson))
-		if err != nil {
-			return nil, NewSystemError(err)
+		if err := d.insertFieldRow(ctx, coll.name, f.Name(), f.Type(), f.DisplayName(), f.IsRequired(), f.IsUnique(), f.IsIndexed(), string(optsJson), 0); err != nil {
+			return nil, err
 		}
 	}
 
@@ -732,7 +753,12 @@ func (d *Database) UpdateCollection(ctx context.Context, name string, input Upda
 	return coll, nil
 }
 
-func (d *Database) DropCollection(ctx context.Context, name string) error {
+func (d *Database) DropCollection(ctx context.Context, name string, cascade ...bool) error {
+	doCascade := false
+	if len(cascade) > 0 {
+		doCascade = cascade[0]
+	}
+
 	d.mu.Lock()
 	coll, ok := d.collections[name]
 	if !ok {
@@ -741,23 +767,36 @@ func (d *Database) DropCollection(ctx context.Context, name string) error {
 	}
 	d.mu.Unlock()
 
+	deps := d.dependentCollections(name)
+	if len(deps) > 0 && !doCascade {
+		return NewForbiddenError(fmt.Sprintf("集合 %s 被 %s 依赖，请使用 cascade=true 级联删除", name, strings.Join(deps, ", ")))
+	}
+	if doCascade {
+		for _, dep := range deps {
+			if err := d.DropCollection(ctx, dep, true); err != nil {
+				if _, ok := err.(*NotFoundError); !ok {
+					return err
+				}
+			}
+		}
+	}
+
+	for _, f := range coll.Fields() {
+		if FieldType(f.Type()) == FieldTypeBelongsToMany {
+			ro := GetRelationOptions(f)
+			if ro.Through != "" {
+				_, _ = d.db.Exec(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quoteIdent(ro.Through)))
+			}
+		}
+	}
+
 	dropDDL := fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quoteIdent(coll.tableName))
 	if _, err := d.db.Exec(ctx, dropDDL); err != nil {
 		return NewSystemError(err)
 	}
 
-	prefix := d.TablePrefix()
-	_, err := d.db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ?`, quoteIdent(prefix+"fields")), name)
-	if err != nil {
-		return NewSystemError(err)
-	}
-	_, err = d.db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE collection_name = ?`, quoteIdent(prefix+"indexes")), name)
-	if err != nil {
-		return NewSystemError(err)
-	}
-	_, err = d.db.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE name = ?`, quoteIdent(prefix+"collections")), name)
-	if err != nil {
-		return NewSystemError(err)
+	if err := d.deleteCollectionMeta(ctx, name); err != nil {
+		return err
 	}
 
 	d.mu.Lock()
@@ -765,6 +804,29 @@ func (d *Database) DropCollection(ctx context.Context, name string) error {
 	d.mu.Unlock()
 
 	return nil
+}
+
+func (d *Database) dependentCollections(name string) []string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	seen := map[string]bool{}
+	var deps []string
+	for _, coll := range d.collections {
+		if coll == nil || coll.name == name {
+			continue
+		}
+		for _, f := range coll.Fields() {
+			if !isRelationField(f) {
+				continue
+			}
+			ro := GetRelationOptions(f)
+			if ro.Target == name && !seen[coll.name] {
+				seen[coll.name] = true
+				deps = append(deps, coll.name)
+			}
+		}
+	}
+	return deps
 }
 
 func (d *Database) RegisterFieldType(typeName string, factory FieldFactory) {

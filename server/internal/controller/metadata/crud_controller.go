@@ -137,6 +137,7 @@ func (cc *CRUDController) List(r *ghttp.Request) {
 	}
 	opts.Filter = filter
 	applyQuerySelection(r, &opts.CommonOptions)
+	applySpecialCollectionQuery(r, cc.db, &opts.CommonOptions)
 
 	page := 1
 	if p, err := strconv.Atoi(r.GetQuery("page").String()); err == nil && p > 0 {
@@ -421,6 +422,77 @@ func (cc *CRUDController) AssociationRemove(r *ghttp.Request) {
 		return
 	}
 	writeOK(r, map[string]any{"ok": true})
+}
+
+func applySpecialCollectionQuery(r *ghttp.Request, db *md.Database, opts *md.CommonOptions) {
+	name := r.Get("collection").String()
+	coll := db.Collection(name)
+	if coll == nil {
+		return
+	}
+	if opts.Filter == nil {
+		opts.Filter = md.Filter{}
+	}
+	switch coll.Type() {
+	case md.CollectionTypeCalendar:
+		startField, endField := "start", "end"
+		if v, ok := coll.Options()["calendarStartField"].(string); ok && v != "" {
+			startField = v
+		}
+		if v, ok := coll.Options()["calendarEndField"].(string); ok && v != "" {
+			endField = v
+		}
+		if start := r.GetQuery("start").String(); start != "" {
+			opts.Filter[startField] = md.Filter{"$gte": start}
+		}
+		if end := r.GetQuery("end").String(); end != "" {
+			opts.Filter[endField] = md.Filter{"$lte": end}
+		}
+	case md.CollectionTypeComment:
+		fk := "target_id"
+		if v, ok := coll.Options()["commentForeignKey"].(string); ok && v != "" {
+			fk = v
+		}
+		if targetID := r.GetQuery("targetId").String(); targetID != "" {
+			opts.Filter[fk] = parseID(targetID)
+		}
+	}
+}
+
+func (cc *CRUDController) Upload(r *ghttp.Request) {
+	name := r.Get("collection").String()
+	file := r.GetUploadFile("file")
+	if file == nil {
+		writeFail(r, http.StatusBadRequest, 1, "缺少 file 字段", nil)
+		return
+	}
+	src, err := file.Open()
+	if err != nil {
+		writeFail(r, http.StatusBadRequest, 1, "无法读取上传文件", nil)
+		return
+	}
+	defer src.Close()
+	rec, err := cc.db.SaveFileObject(r.Context(), name, file.Filename, file.Header.Get("Content-Type"), src)
+	if err != nil {
+		writeLogicError(r, err)
+		return
+	}
+	writeCreated(r, rec)
+}
+
+func (cc *CRUDController) FileContent(r *ghttp.Request) {
+	abs, mimeType, downloadName, err := cc.db.OpenFileObject(r.Context(), r.Get("collection").String(), parseID(r.Get("id").String()))
+	if err != nil {
+		writeLogicError(r, err)
+		return
+	}
+	if mimeType != "" {
+		r.Response.Header().Set("Content-Type", mimeType)
+	}
+	if downloadName != "" {
+		r.Response.Header().Set("Content-Disposition", `inline; filename="`+downloadName+`"`)
+	}
+	r.Response.ServeFile(abs)
 }
 
 func splitAndTrim(s string) []string {

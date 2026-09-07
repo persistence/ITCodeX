@@ -46,6 +46,8 @@ func registerDynamicCRUD(group *ghttp.RouterGroup, db *md.Database) {
 	cc := controllermd.NewCRUDController(db)
 	group.GET("/{collection}/count", cc.Count)
 	group.POST("/{collection}/batch", cc.CreateMany)
+	group.POST("/{collection}/upload", cc.Upload)
+	group.GET("/{collection}/files/{id}/content", cc.FileContent)
 	group.GET("/{collection}", cc.List)
 	group.POST("/{collection}", cc.Create)
 	group.PUT("/{collection}", cc.UpdateMany)

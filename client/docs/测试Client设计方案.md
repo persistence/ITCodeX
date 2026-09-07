@@ -1,9 +1,9 @@
 # ITCodeX 元数据模块 - 测试 Client 设计方案
 
-> 版本: v2.0
-> 日期: 2026-09-05
+> 版本: v2.1
+> 日期: 2026-09-07
 > 技术栈: Go + net/http + testing + testify
-> 对齐规格: [docs/元数据/设计方案](../../docs/元数据/设计方案/)（五阶段能力闭环）
+> 对齐规格: [docs/元数据/设计方案](../../docs/元数据/设计方案/)（含嵌套关联 / cascade / validate 钩子 / 本地文件存储）
 
 ## 1. 概述
 
@@ -62,7 +62,8 @@ client/
 │       ├── relation_test.go         # 关系/appends/关联 HTTP（三期）
 │       ├── index_test.go            # 索引 Meta API（三期）
 │       ├── script_test.go           # Yaegi 脚本（四期）
-│       └── enhanced_test.go         # 公式/加密/序列/特殊表（五期）
+│       ├── enhanced_test.go         # 公式/加密/序列/特殊表（五期）
+│       └── gap_e2e_test.go          # 嵌套写入 / cascade / toggle / whitelist / upload
 ├── docs/测试Client设计方案.md       # 本文档
 ├── go.mod
 └── go.sum
@@ -74,11 +75,11 @@ client/
 |------|------|-------------|----------|
 | 一 | Collection/Field CRUD、记录 CRUD、基础 Filter、分页排序 | `meta` / `crud` | `meta` / `crud` / `filter` / `validation` |
 | 二 | 选择/媒体字段、`$empty/$notEmpty/$includes`、CEL 规则 | `meta` / `crud` | `filter` / `validation` / `enhanced` |
-| 三 | 关系字段、`appends`、关联过滤、关联 HTTP、Index API | `association` / `meta` | `relation` / `index` |
-| 四 | Script list/save/disable/delete/validate、钩子、自定义 API | `meta` | `script` |
-| 五 | formula/encrypted/sequence/uuid、tree/calendar/comment/file | `meta` / `crud` | `enhanced` |
+| 三 | 关系、`appends`、关联 HTTP、嵌套创建、多层 Filter、Index、`onDelete` | `association` / `meta` / `crud` | `relation` / `index` / `gap_e2e` |
+| 四 | Script list/save/update/toggle/disable/delete/validate、钩子 | `meta` | `script` / `gap_e2e` |
+| 五 | formula/encrypted/sequence/uuid、tree/calendar/comment/file、本地上传 | `meta` / `crud` | `enhanced` / `gap_e2e` |
 
-**明确不做（与设计 README 一致）**：页面/权限/工作流、对象存储上传流、`$col`/`$exists`/日期族算子、dao/do 迁移相关断言。
+**明确不做**：页面/权限/工作流、云对象存储、`$col`/`$exists`/日期族算子、dao/do 生成文件断言。
 
 ## 4. 核心模块设计
 
@@ -105,32 +106,36 @@ type Client struct {
 |------|------|------|
 | `GET /api/meta/collections` | ListCollections | data 为 `{list,total}` |
 | `POST /api/meta/collections` | CreateCollection | 支持 general/tree/calendar/comment/file |
-| `GET/PUT/DELETE .../collections/:name` | Get/Update/Drop | |
+| `GET/PUT/DELETE .../collections/:name` | Get/Update/Drop | Drop 支持 `cascade` |
 | `POST .../collections/:name/sync` | SyncCollection | 差量 ADD COLUMN |
 | `GET/POST/PUT/DELETE .../fields` | List/Add/Update/RemoveField | |
 | `GET/POST/DELETE .../indexes` | List/Create/DeleteIndex | 三期 |
-| `GET/POST /api/meta/scripts` | List/SaveScript | |
+| `GET/POST /api/meta/scripts` | List/CreateScript | |
+| `PUT .../scripts/:id` | UpdateScript | |
+| `PUT .../scripts/:id/toggle` | ToggleScript | |
 | `POST .../scripts/:id/disable` | DisableScript | |
 | `DELETE .../scripts/:id` | DeleteScript | |
 | `POST .../scripts/validate` | ValidateScript | |
 
-`CreateFieldInput` 需支持关系与增强字段选项：`target` / `foreignKey` / `through` / `expression` / `pattern` 等（对齐服务端 `CreateFieldInput`）。
+`CreateFieldInput` 支持：`target` / `foreignKey` / `through` / `onDelete` / `expression` / `pattern` 等。
 
 ### 4.3 数据 CRUD (`crud.go`)
 
 | 接口 | 方法 |
 |------|------|
-| `GET /api/c/:collection` | List（filter/sort/fields/except/**appends**/page） |
+| `GET /api/c/:collection` | List（filter/sort/fields/except/**appends**/page；日历 `start`/`end`、评论 `targetId`） |
 | `GET /api/c/:collection/:id` | FindOne（fields/except/**appends**） |
-| `POST /api/c/:collection` | Create |
+| `POST /api/c/:collection` | Create（支持嵌套关联对象） |
 | `POST /api/c/:collection/batch` | CreateMany |
-| `PUT /api/c/:collection/:id` | Update |
+| `POST /api/c/:collection/upload` | UploadFile（multipart，file 表） |
+| `GET /api/c/:collection/files/:id/content` | DownloadFile |
+| `PUT /api/c/:collection/:id` | Update（`whitelist`/`blacklist`） |
 | `PUT /api/c/:collection?filter=` | UpdateMany |
 | `DELETE /api/c/:collection/:id` | DeleteOne |
 | `DELETE /api/c/:collection?filter=` | BulkDelete |
-| `GET /api/c/:collection/count` | Count（**不要**用 List.Total 凑数） |
+| `GET /api/c/:collection/count` | Count |
 
-`FindOptions` / `FindOneOptions` 增加 `Appends []string`。
+`FindOptions` 含 `Appends`、`Start`/`End`/`TargetID`；`UpdateOptions` 含 `Whitelist`/`Blacklist`。
 
 ### 4.4 关联 API (`association.go`)
 
@@ -204,27 +209,32 @@ Meta 列表类接口统一从 `data.list` 取值，避免把 `{list,total}` 直�
 | TestBelongsTo_Appends | 创建作者/文章，List/Get 带 `appends=author_id` |
 | TestHasMany_SetAssociation | SetAssociation 后 appends 可见子记录 |
 | TestBelongsToMany_Through | 中间表关联 add/set/remove |
-| TestFilter_AssociationPath | `filter={"posts.title":{"$eq":"..."}}` |
-| TestNestedCreate_Association | create values 嵌套 `{id}` / 解除 `null` |
+| TestNestedCreate_HasMany | Create 时无 id 嵌套新建 posts |
+| TestNestedCreate_BelongsTo | Create 时嵌套新建 author |
+| TestFilter_NestedAssociationPath | `posts.comments.body` 多层过滤 |
+| TestDestroy_OnDeleteCascade | 删父级级联子行 |
+| TestDropCollection_Cascade | 有依赖时需 cascade |
 | TestIndex_CreateListDelete | Meta Index API 闭环 |
 
-### 5.4 四期 (`script_test.go`)
+### 5.4 四期 (`script_test.go` / `gap_e2e`)
 
 | 用例 | 说明 |
 |------|------|
-| TestScript_SaveValidateDisableDelete | 脚本生命周期 |
-| TestScript_BeforeCreateHook | 保存钩子后 Create 观察副作用字段 |
-| TestScript_CustomAPI | 注册 customAPI，HTTP 调 `/api/custom/...` |
+| TestScript_ValidateAndLifecycle | validate → save → hook → disable → delete |
+| TestScript_Toggle | PUT toggle 翻转 enabled |
+| TestScript_BeforeValidate | beforeValidate 规范化字段 |
 
-### 5.5 五期 (`enhanced_test.go`)
+### 5.5 五期 (`enhanced_test.go` / `gap_e2e`)
 
 | 用例 | 说明 |
 |------|------|
 | TestField_SequenceUUIDEncrypted | 自动序列 / UUID / 加密读写 |
-| TestField_FormulaGeo | formula 写前计算、point GeoJSON |
-| TestCollection_TreeChildren | type=tree，`appends=children` |
-| TestCollection_FileDefaults | type=file 具备 name/url/mime/size |
-| TestCollection_CalendarComment | 默认字段存在即可（语义冒烟） |
+| TestField_PointGeo | point GeoJSON |
+| TestCollection_TreeChildren | type=tree，`appends=children` 递归 |
+| TestCollection_FileDefaults | type=file 默认字段 |
+| TestCollection_FileUpload | multipart 上传与 content 下载 |
+| TestCollection_CalendarRange | `?start=&end=` 区间过滤 |
+| TestUpdate_Whitelist | 只更新白名单字段 |
 
 ## 6. 测试执行
 

@@ -16,10 +16,27 @@ type ScriptListRes struct {
 }
 
 type ScriptSaveReq struct {
-	g.Meta `path:"/scripts" method:"post" tags:"Meta" summary:"创建或更新 Yaegi 脚本"`
+	g.Meta `path:"/scripts" method:"post" tags:"Meta" summary:"创建 Yaegi 脚本"`
 	modelmd.YaegiScript
 }
 type ScriptSaveRes struct {
+	*modelmd.YaegiScript
+}
+
+type ScriptUpdateReq struct {
+	g.Meta `path:"/scripts/{id}" method:"put" tags:"Meta" summary:"更新 Yaegi 脚本"`
+	Id     int64 `json:"id" p:"id" v:"required"`
+	modelmd.YaegiScript
+}
+type ScriptUpdateRes struct {
+	*modelmd.YaegiScript
+}
+
+type ScriptToggleReq struct {
+	g.Meta `path:"/scripts/{id}/toggle" method:"put" tags:"Meta" summary:"启用或禁用 Yaegi 脚本"`
+	Id     int64 `json:"id" p:"id" v:"required"`
+}
+type ScriptToggleRes struct {
 	*modelmd.YaegiScript
 }
 

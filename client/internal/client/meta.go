@@ -93,7 +93,15 @@ func (c *Client) UpdateCollection(ctx context.Context, name string, input Update
 }
 
 func (c *Client) DropCollection(ctx context.Context, name string) error {
-	_, err := c.del(ctx, fmt.Sprintf("/api/meta/collections/%s", name), nil)
+	return c.DropCollectionCascade(ctx, name, false)
+}
+
+func (c *Client) DropCollectionCascade(ctx context.Context, name string, cascade bool) error {
+	params := map[string]string{}
+	if cascade {
+		params["cascade"] = "true"
+	}
+	_, err := c.del(ctx, fmt.Sprintf("/api/meta/collections/%s", name), params)
 	return err
 }
 
@@ -211,6 +219,31 @@ func (c *Client) ListScripts(ctx context.Context) ([]Script, error) {
 
 func (c *Client) CreateScript(ctx context.Context, input CreateScriptInput) (*Script, error) {
 	resp, err := c.post(ctx, "/api/meta/scripts", input)
+	if err != nil {
+		return nil, err
+	}
+	var script Script
+	if err := extractData(resp, &script); err != nil {
+		return nil, err
+	}
+	return &script, nil
+}
+
+func (c *Client) UpdateScript(ctx context.Context, id int64, input CreateScriptInput) (*Script, error) {
+	input.ID = id
+	resp, err := c.put(ctx, fmt.Sprintf("/api/meta/scripts/%d", id), input)
+	if err != nil {
+		return nil, err
+	}
+	var script Script
+	if err := extractData(resp, &script); err != nil {
+		return nil, err
+	}
+	return &script, nil
+}
+
+func (c *Client) ToggleScript(ctx context.Context, id int64) (*Script, error) {
+	resp, err := c.put(ctx, fmt.Sprintf("/api/meta/scripts/%d/toggle", id), nil)
 	if err != nil {
 		return nil, err
 	}
