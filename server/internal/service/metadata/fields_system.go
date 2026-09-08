@@ -138,10 +138,45 @@ func NewUpdatedAtField(coll *Collection, opts map[string]any) Field {
 	}
 }
 
+type ActorField struct {
+	BaseField
+}
+
+func (f *ActorField) ValidateValue(ctx context.Context, value any) error {
+	return nil
+}
+
+func newActorField(fieldType FieldType, name, displayName string, opts map[string]any) Field {
+	if opts == nil {
+		opts = make(map[string]any)
+	}
+	if _, ok := opts["name"]; !ok {
+		opts["name"] = name
+	}
+	if _, ok := opts["displayName"]; !ok {
+		opts["displayName"] = displayName
+	}
+	opts["isSystem"] = true
+	opts["required"] = false
+	return &ActorField{
+		BaseField: newBaseField(string(fieldType), DataTypeBigInt, opts),
+	}
+}
+
+func NewCreatedByField(coll *Collection, opts map[string]any) Field {
+	return newActorField(FieldTypeCreatedBy, "created_by", "创建人", opts)
+}
+
+func NewUpdatedByField(coll *Collection, opts map[string]any) Field {
+	return newActorField(FieldTypeUpdatedBy, "updated_by", "更新人", opts)
+}
+
 type PresetFieldFactory func(coll *Collection, opts map[string]any) Field
 
 var PresetFieldsMap = map[string]PresetFieldFactory{
 	"id":        NewIDField,
 	"createdAt": NewCreatedAtField,
 	"updatedAt": NewUpdatedAtField,
+	"createdBy": NewCreatedByField,
+	"updatedBy": NewUpdatedByField,
 }

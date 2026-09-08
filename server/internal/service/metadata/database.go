@@ -72,6 +72,7 @@ type YaegiManager interface {
 	ExecuteAfterValidate(ctx context.Context, coll *Collection, data map[string]any) error
 	ExecuteCustomAPI(script *modelmd.YaegiScript, ctx *yaegictx.YaegiHTTPContext) error
 	ValidateScript(content string) error
+	ExecuteBeforeFind(ctx context.Context, coll *Collection, filter Filter) (Filter, error)
 	ExecuteAfterFind(ctx context.Context, coll *Collection, records []*Record) error
 }
 
@@ -221,6 +222,71 @@ func (d *Database) createSystemTables(ctx context.Context) error {
 				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 			q(prefix+"yaegi_scripts"), q("id"), q("collection_name"), q("name"), q("hook_point"), q("content"),
 			q("api_path"), q("http_method"), q("enabled"), q("priority"), q("options"), q("created_at"), q("updated_at"),
+		),
+		fmt.Sprintf(
+			"CREATE TABLE IF NOT EXISTS %s ("+
+				"%s BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,"+
+				"%s VARCHAR(191) NOT NULL UNIQUE,"+
+				"%s VARCHAR(255) NOT NULL DEFAULT '',"+
+				"%s VARCHAR(512) NOT NULL,"+
+				"%s TINYINT(1) NOT NULL DEFAULT 1,"+
+				"%s DATETIME NULL,"+
+				"%s DATETIME NULL"+
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+			q(prefix+"auth_users"), q("id"), q("username"), q("display_name"), q("password_hash"), q("enabled"), q("created_at"), q("updated_at"),
+		),
+		fmt.Sprintf(
+			"CREATE TABLE IF NOT EXISTS %s ("+
+				"%s BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,"+
+				"%s VARCHAR(191) NOT NULL UNIQUE,"+
+				"%s VARCHAR(255) NOT NULL DEFAULT '',"+
+				"%s DATETIME NULL,"+
+				"%s DATETIME NULL"+
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+			q(prefix+"auth_roles"), q("id"), q("name"), q("display_name"), q("created_at"), q("updated_at"),
+		),
+		fmt.Sprintf(
+			"CREATE TABLE IF NOT EXISTS %s ("+
+				"%s BIGINT NOT NULL,"+
+				"%s BIGINT NOT NULL,"+
+				"%s DATETIME NULL,"+
+				"PRIMARY KEY (%s, %s),"+
+				"KEY %s (%s)"+
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+			q(prefix+"auth_user_roles"), q("user_id"), q("role_id"), q("created_at"),
+			q("user_id"), q("role_id"), q("idx_auth_user_roles_role"), q("role_id"),
+		),
+		fmt.Sprintf(
+			"CREATE TABLE IF NOT EXISTS %s ("+
+				"%s VARCHAR(64) NOT NULL PRIMARY KEY,"+
+				"%s BIGINT NOT NULL,"+
+				"%s CHAR(64) NOT NULL,"+
+				"%s DATETIME NOT NULL,"+
+				"%s DATETIME NULL,"+
+				"%s DATETIME NULL,"+
+				"KEY %s (%s)"+
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+			q(prefix+"auth_sessions"), q("id"), q("user_id"), q("token_hash"), q("expires_at"),
+			q("revoked_at"), q("created_at"), q("idx_auth_sessions_user"), q("user_id"),
+		),
+		fmt.Sprintf(
+			"CREATE TABLE IF NOT EXISTS %s ("+
+				"%s BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,"+
+				"%s VARCHAR(20) NOT NULL,"+
+				"%s VARCHAR(191) NOT NULL DEFAULT '',"+
+				"%s VARCHAR(191) NOT NULL,"+
+				"%s VARCHAR(100) NOT NULL,"+
+				"%s JSON NULL,"+
+				"%s JSON NULL,"+
+				"%s JSON NULL,"+
+				"%s TINYINT(1) NOT NULL DEFAULT 1,"+
+				"%s DATETIME NULL,"+
+				"%s DATETIME NULL,"+
+				"KEY %s (%s, %s)"+
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+			q(prefix+"acl_policies"), q("id"), q("subject_type"), q("subject"), q("resource"), q("action"),
+			q("row_filter"), q("read_fields"), q("write_fields"), q("enabled"), q("created_at"), q("updated_at"),
+			q("idx_acl_resource_action"), q("resource"), q("action"),
 		),
 	}
 
@@ -634,7 +700,7 @@ func (d *Database) CreateCollection(ctx context.Context, input CreateCollectionI
 
 	presetFields := input.PresetFields
 	if len(presetFields) == 0 {
-		presetFields = []string{"id", "createdAt", "updatedAt"}
+		presetFields = []string{"id", "createdAt", "createdBy", "updatedAt", "updatedBy"}
 	}
 
 	if autoGenId {

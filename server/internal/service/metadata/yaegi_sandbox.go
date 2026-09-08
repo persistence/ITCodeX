@@ -189,7 +189,6 @@ func (m *DefaultYaegiManager) buildExports() map[string]map[string]reflect.Value
 			"Collection": reflect.ValueOf(func(ctx context.Context, name string) *YaegiRepository {
 				return (&YaegiDB{db: m.db, ctx: ctx}).Collection(name)
 			}),
-			"NewYaegiDB": reflect.ValueOf(NewYaegiDB),
 		},
 		"itcodex/validation/validation": {
 			"ValidateCEL": reflect.ValueOf(func(data map[string]any, expression string) (bool, error) {

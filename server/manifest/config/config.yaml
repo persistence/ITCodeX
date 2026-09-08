@@ -9,6 +9,13 @@ logger:
   level: "info"
   stdout: true
 
+auth:
+  issuer: "itcodex"
+  accessTTL: "15m"
+  refreshTTL: "168h"
+  # JWT 密钥不写入配置库；通过 ITCODEX_JWT_SECRET 注入（至少 32 字节）。
+  jwtSecret: ""
+
 database:
   logger:
     level: "all"

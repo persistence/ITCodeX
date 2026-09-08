@@ -153,12 +153,13 @@ type Fields []string
 type Appends []string
 
 type CommonOptions struct {
-	Ctx     context.Context
-	Filter  Filter  `json:"filter,omitempty"`
-	Fields  Fields  `json:"fields,omitempty"`
-	Except  Fields  `json:"except,omitempty"`
-	Appends Appends `json:"appends,omitempty"`
-	Sort    Sort    `json:"sort,omitempty"`
+	Ctx          context.Context
+	Filter       Filter  `json:"filter,omitempty"`
+	Fields       Fields  `json:"fields,omitempty"`
+	Except       Fields  `json:"except,omitempty"`
+	Appends      Appends `json:"appends,omitempty"`
+	Sort         Sort    `json:"sort,omitempty"`
+	StrictFields bool    `json:"-"`
 }
 
 type UpdateCollectionInput struct {

@@ -525,6 +525,40 @@ func hookSymbolNames(hp HookPoint) []string {
 	return []string{s, pascal}
 }
 
+func (m *DefaultYaegiManager) ExecuteBeforeFind(ctx context.Context, coll *Collection, filter Filter) (result Filter, err error) {
+	result = filter
+	if result == nil {
+		result = Filter{}
+	}
+	hooks := m.getHooks(coll.Name(), HookPointBeforeFind)
+	for _, inst := range hooks {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					err = fmt.Errorf("script panic: %v", recovered)
+				}
+			}()
+			if err != nil {
+				return
+			}
+			fn, ok := inst.hooks[HookPointBeforeFind]
+			if !ok || !fn.IsValid() {
+				return
+			}
+			returns := fn.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(map[string]any(result))})
+			if len(returns) >= 2 {
+				if next, ok := returns[0].Interface().(map[string]any); ok && next != nil {
+					result = Filter(next)
+				}
+				if hookErr, ok := returns[1].Interface().(error); ok && hookErr != nil {
+					err = hookErr
+				}
+			}
+		}()
+	}
+	return result, err
+}
+
 func (m *DefaultYaegiManager) ExecuteAfterFind(ctx context.Context, coll *Collection, records []*Record) (err error) {
 	hooks := m.getHooks(coll.Name(), HookPointAfterFind)
 	for _, inst := range hooks {

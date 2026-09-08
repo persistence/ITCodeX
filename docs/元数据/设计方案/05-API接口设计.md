@@ -514,7 +514,10 @@ DELETE /api/c/:collection/:id
 ```
 DELETE /api/c/:collection?filter={...}
 ```
-**注意:** 不带 filter 时视为 truncate。本模块无独立权限体系，由网关/调用方约束；服务端可加配置开关禁止无条件清空。
+**注意:** 不带 filter 时视为 truncate。服务端同时要求 `destroyMany` ACL
+权限，并将策略行过滤与请求过滤合并；配置开关仍可禁止无条件清空。
+
+权限与认证接口见 [09-ResourceManager与ACL](./09-ResourceManager与ACL.md)。
 
 ### 3.9 关联操作（第三阶段）
 ```

@@ -14,8 +14,9 @@ import (
 )
 
 type Client struct {
-	BaseURL    string
-	HTTPClient *http.Client
+	BaseURL     string
+	HTTPClient  *http.Client
+	AccessToken string
 }
 
 func NewClient(baseURL string) *Client {
@@ -65,6 +66,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any, p
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if c.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

@@ -51,3 +51,54 @@ CREATE TABLE IF NOT EXISTS `c_yaegi_scripts` (
     `created_at` DATETIME NULL,
     `updated_at` DATETIME NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `c_auth_users` (
+    `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `username` VARCHAR(191) NOT NULL UNIQUE,
+    `display_name` VARCHAR(255) NOT NULL DEFAULT '',
+    `password_hash` VARCHAR(512) NOT NULL,
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NULL,
+    `updated_at` DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `c_auth_roles` (
+    `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(191) NOT NULL UNIQUE,
+    `display_name` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NULL,
+    `updated_at` DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `c_auth_user_roles` (
+    `user_id` BIGINT NOT NULL,
+    `role_id` BIGINT NOT NULL,
+    `created_at` DATETIME NULL,
+    PRIMARY KEY (`user_id`, `role_id`),
+    KEY `idx_auth_user_roles_role` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `c_auth_sessions` (
+    `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+    `user_id` BIGINT NOT NULL,
+    `token_hash` CHAR(64) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `revoked_at` DATETIME NULL,
+    `created_at` DATETIME NULL,
+    KEY `idx_auth_sessions_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `c_acl_policies` (
+    `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `subject_type` VARCHAR(20) NOT NULL,
+    `subject` VARCHAR(191) NOT NULL DEFAULT '',
+    `resource` VARCHAR(191) NOT NULL,
+    `action` VARCHAR(100) NOT NULL,
+    `row_filter` JSON NULL,
+    `read_fields` JSON NULL,
+    `write_fields` JSON NULL,
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NULL,
+    `updated_at` DATETIME NULL,
+    KEY `idx_acl_resource_action` (`resource`, `action`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -10,18 +10,50 @@ import (
 	"github.com/gogf/gf/v2/net/ghttp"
 
 	md "itcodex/server/internal/service/metadata"
+	resourcemgr "itcodex/server/internal/service/resource"
 )
 
 type CRUDController struct {
-	db *md.Database
+	db        *md.Database
+	resources *resourcemgr.Manager
 }
 
-func NewCRUDController(db *md.Database) *CRUDController {
-	return &CRUDController{db: db}
+func NewCRUDController(db *md.Database, managers ...*resourcemgr.Manager) *CRUDController {
+	var manager *resourcemgr.Manager
+	if len(managers) > 0 {
+		manager = managers[0]
+	}
+	if manager == nil {
+		manager = resourcemgr.NewManager()
+		manager.RegisterMetadataCRUD(resourcemgr.DatabaseResolver{Database: db})
+	}
+	return &CRUDController{db: db, resources: manager}
+}
+
+func (cc *CRUDController) dispatch(r *ghttp.Request, action string, params map[string]any, data, options any) (any, bool) {
+	resourceName := r.GetRouter("collection").String()
+	if resourceName == "" {
+		resourceName = r.Get("collection").String()
+	}
+	result, err := cc.resources.Dispatch(r.Context(), &resourcemgr.ActionRequest{
+		Resource: resourceName,
+		Action:   action,
+		Params:   params,
+		Data:     data,
+		Options:  options,
+	})
+	if err != nil {
+		writeLogicError(r, err)
+		return nil, false
+	}
+	return result, true
 }
 
 func (cc *CRUDController) repo(r *ghttp.Request) (md.Repository, bool) {
-	name := r.Get("collection").String()
+	name := r.GetRouter("collection").String()
+	if name == "" {
+		name = r.Get("collection").String()
+	}
 	if name == "" {
 		writeFail(r, http.StatusBadRequest, 1, "collection 不能为空", nil)
 		return nil, false
@@ -126,7 +158,7 @@ func applyQuerySelection(r *ghttp.Request, opts *md.CommonOptions) {
 }
 
 func (cc *CRUDController) List(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -157,26 +189,26 @@ func (cc *CRUDController) List(r *ghttp.Request) {
 	opts.Page = page
 	opts.PageSize = pageSize
 
-	records, total, err := repo.FindAndCount(r.Context(), opts)
-	if err != nil {
-		writeLogicError(r, err)
+	result, ok := cc.dispatch(r, resourcemgr.ActionList, nil, nil, opts)
+	if !ok {
 		return
 	}
-	list := make([]map[string]any, 0, len(records))
-	for _, rec := range records {
-		list = append(list, rec.Data())
+	listResult, ok := result.(resourcemgr.CollectionListResult)
+	if !ok {
+		writeFail(r, http.StatusInternalServerError, 1, "资源列表结果类型错误", nil)
+		return
 	}
 	totalPages := 0
-	if total > 0 && pageSize > 0 {
-		totalPages = (total + pageSize - 1) / pageSize
+	if listResult.Total > 0 && pageSize > 0 {
+		totalPages = (listResult.Total + pageSize - 1) / pageSize
 	}
 	writeOK(r, map[string]any{
-		"list": list, "total": total, "page": page, "pageSize": pageSize, "totalPages": totalPages,
+		"list": listResult.List, "total": listResult.Total, "page": page, "pageSize": pageSize, "totalPages": totalPages,
 	})
 }
 
 func (cc *CRUDController) Count(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -186,31 +218,36 @@ func (cc *CRUDController) Count(r *ghttp.Request) {
 		return
 	}
 	opts.Filter = filter
-	n, err := repo.Count(r.Context(), opts)
-	if err != nil {
-		writeLogicError(r, err)
-		return
-	}
-	writeOK(r, map[string]any{"count": n})
-}
-
-func (cc *CRUDController) Get(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	result, ok := cc.dispatch(r, resourcemgr.ActionCount, nil, nil, opts)
 	if !ok {
 		return
 	}
-	opts := &md.FindOneOptions{FilterByTk: parseID(r.Get("id").String())}
-	applyQuerySelection(r, &opts.CommonOptions)
-	record, err := repo.FindOne(r.Context(), opts)
-	if err != nil {
-		writeLogicError(r, err)
+	count, ok := result.(int)
+	if !ok {
+		writeFail(r, http.StatusInternalServerError, 1, "资源计数结果类型错误", nil)
 		return
 	}
-	writeOK(r, record.Data())
+	writeOK(r, map[string]any{"count": count})
+}
+
+func (cc *CRUDController) Get(r *ghttp.Request) {
+	_, ok := cc.repo(r)
+	if !ok {
+		return
+	}
+	opts := &md.FindOneOptions{FilterByTk: parseID(r.GetRouter("id").String())}
+	applyQuerySelection(r, &opts.CommonOptions)
+	result, ok := cc.dispatch(r, resourcemgr.ActionGet, map[string]any{
+		"id": parseID(r.GetRouter("id").String()),
+	}, nil, opts)
+	if !ok {
+		return
+	}
+	writeOK(r, result)
 }
 
 func (cc *CRUDController) Create(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -219,16 +256,15 @@ func (cc *CRUDController) Create(r *ghttp.Request) {
 		writeFail(r, http.StatusBadRequest, 1, "请求体解析失败: "+err.Error(), nil)
 		return
 	}
-	record, err := repo.Create(r.Context(), &md.CreateOptions{Values: values})
-	if err != nil {
-		writeLogicError(r, err)
+	result, ok := cc.dispatch(r, resourcemgr.ActionCreate, nil, values, &md.CreateOptions{})
+	if !ok {
 		return
 	}
-	writeCreated(r, record.Data())
+	writeCreated(r, result)
 }
 
 func (cc *CRUDController) CreateMany(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -237,20 +273,15 @@ func (cc *CRUDController) CreateMany(r *ghttp.Request) {
 		writeFail(r, http.StatusBadRequest, 1, "请求体必须是对象数组", nil)
 		return
 	}
-	created, err := repo.CreateMany(r.Context(), &md.CreateManyOptions{Records: records})
-	if err != nil {
-		writeLogicError(r, err)
+	result, ok := cc.dispatch(r, resourcemgr.ActionCreateMany, nil, records, &md.CreateManyOptions{})
+	if !ok {
 		return
 	}
-	list := make([]map[string]any, 0, len(created))
-	for _, rec := range created {
-		list = append(list, rec.Data())
-	}
-	writeCreated(r, list)
+	writeCreated(r, result)
 }
 
 func (cc *CRUDController) Update(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -259,27 +290,29 @@ func (cc *CRUDController) Update(r *ghttp.Request) {
 		writeFail(r, http.StatusBadRequest, 1, "请求体解析失败: "+err.Error(), nil)
 		return
 	}
-	opts := &md.UpdateOptions{FilterByTk: parseID(r.Get("id").String()), Values: values}
+	opts := &md.UpdateOptions{FilterByTk: parseID(r.GetRouter("id").String()), Values: values}
 	if wl := r.GetQuery("whitelist").String(); wl != "" {
 		opts.Whitelist = splitAndTrim(wl)
 	}
 	if bl := r.GetQuery("blacklist").String(); bl != "" {
 		opts.Blacklist = splitAndTrim(bl)
 	}
-	record, affected, err := repo.Update(r.Context(), opts)
-	if err != nil {
-		writeLogicError(r, err)
+	result, ok := cc.dispatch(r, resourcemgr.ActionUpdate, map[string]any{
+		"id": opts.FilterByTk,
+	}, values, opts)
+	if !ok {
 		return
 	}
-	data := any(nil)
-	if record != nil {
-		data = record.Data()
+	mutation, ok := result.(resourcemgr.MutationResult)
+	if !ok {
+		writeFail(r, http.StatusInternalServerError, 1, "资源更新结果类型错误", nil)
+		return
 	}
-	writeOK(r, map[string]any{"record": data, "affected": affected})
+	writeOK(r, map[string]any{"record": mutation.Record, "affected": mutation.Affected})
 }
 
 func (cc *CRUDController) UpdateMany(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -304,29 +337,38 @@ func (cc *CRUDController) UpdateMany(r *ghttp.Request) {
 	if bl := r.GetQuery("blacklist").String(); bl != "" {
 		opts.Blacklist = splitAndTrim(bl)
 	}
-	_, affected, err := repo.Update(r.Context(), opts)
-	if err != nil {
-		writeLogicError(r, err)
-		return
-	}
-	writeOK(r, map[string]any{"affected": affected})
-}
-
-func (cc *CRUDController) Destroy(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	result, ok := cc.dispatch(r, resourcemgr.ActionUpdateMany, nil, values, opts)
 	if !ok {
 		return
 	}
-	affected, err := repo.Destroy(r.Context(), &md.DestroyOptions{FilterByTk: parseID(r.Get("id").String())})
-	if err != nil {
-		writeLogicError(r, err)
+	mutation, ok := result.(resourcemgr.MutationResult)
+	if !ok {
+		writeFail(r, http.StatusInternalServerError, 1, "资源批量更新结果类型错误", nil)
 		return
 	}
-	writeOK(r, map[string]any{"affected": affected})
+	writeOK(r, map[string]any{"affected": mutation.Affected})
+}
+
+func (cc *CRUDController) Destroy(r *ghttp.Request) {
+	_, ok := cc.repo(r)
+	if !ok {
+		return
+	}
+	id := parseID(r.GetRouter("id").String())
+	result, ok := cc.dispatch(r, resourcemgr.ActionDestroy, map[string]any{"id": id}, nil, &md.DestroyOptions{FilterByTk: id})
+	if !ok {
+		return
+	}
+	mutation, ok := result.(resourcemgr.MutationResult)
+	if !ok {
+		writeFail(r, http.StatusInternalServerError, 1, "资源删除结果类型错误", nil)
+		return
+	}
+	writeOK(r, map[string]any{"affected": mutation.Affected})
 }
 
 func (cc *CRUDController) DestroyMany(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -343,30 +385,36 @@ func (cc *CRUDController) DestroyMany(r *ghttp.Request) {
 		}
 		opts.Truncate = true
 	}
-	affected, err := repo.Destroy(r.Context(), opts)
-	if err != nil {
-		writeLogicError(r, err)
+	result, ok := cc.dispatch(r, resourcemgr.ActionDestroyMany, nil, nil, opts)
+	if !ok {
 		return
 	}
-	writeOK(r, map[string]any{"affected": affected})
+	mutation, ok := result.(resourcemgr.MutationResult)
+	if !ok {
+		writeFail(r, http.StatusInternalServerError, 1, "资源批量删除结果类型错误", nil)
+		return
+	}
+	writeOK(r, map[string]any{"affected": mutation.Affected})
 }
 
 func (cc *CRUDController) AssociationList(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
 	// Use router params only — query ?id= must not shadow path :id
-	list, err := repo.ListAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String())
-	if err != nil {
-		writeLogicError(r, err)
+	result, ok := cc.dispatch(r, resourcemgr.ActionAssociationList, map[string]any{
+		"id":          parseID(r.GetRouter("id").String()),
+		"association": r.GetRouter("association").String(),
+	}, nil, nil)
+	if !ok {
 		return
 	}
-	writeOK(r, map[string]any{"list": list})
+	writeOK(r, map[string]any{"list": result})
 }
 
 func (cc *CRUDController) AssociationAdd(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -375,15 +423,18 @@ func (cc *CRUDController) AssociationAdd(r *ghttp.Request) {
 		writeFail(r, http.StatusBadRequest, 1, "invalid json body", nil)
 		return
 	}
-	if err := repo.AddAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
-		writeLogicError(r, err)
+	_, ok = cc.dispatch(r, resourcemgr.ActionAssociationAdd, map[string]any{
+		"id":          parseID(r.GetRouter("id").String()),
+		"association": r.GetRouter("association").String(),
+	}, body, nil)
+	if !ok {
 		return
 	}
 	writeOK(r, map[string]any{"ok": true})
 }
 
 func (cc *CRUDController) AssociationSet(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -392,15 +443,18 @@ func (cc *CRUDController) AssociationSet(r *ghttp.Request) {
 		writeFail(r, http.StatusBadRequest, 1, "invalid json body", nil)
 		return
 	}
-	if err := repo.SetAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
-		writeLogicError(r, err)
+	_, ok = cc.dispatch(r, resourcemgr.ActionAssociationSet, map[string]any{
+		"id":          parseID(r.GetRouter("id").String()),
+		"association": r.GetRouter("association").String(),
+	}, body, nil)
+	if !ok {
 		return
 	}
 	writeOK(r, map[string]any{"ok": true})
 }
 
 func (cc *CRUDController) AssociationRemove(r *ghttp.Request) {
-	repo, ok := cc.repo(r)
+	_, ok := cc.repo(r)
 	if !ok {
 		return
 	}
@@ -417,15 +471,21 @@ func (cc *CRUDController) AssociationRemove(r *ghttp.Request) {
 			body = map[string]any{"id": parseID(qid)}
 		}
 	}
-	if err := repo.RemoveAssociation(r.Context(), parseID(r.GetRouter("id").String()), r.GetRouter("association").String(), body); err != nil {
-		writeLogicError(r, err)
+	_, ok = cc.dispatch(r, resourcemgr.ActionAssociationRemove, map[string]any{
+		"id":          parseID(r.GetRouter("id").String()),
+		"association": r.GetRouter("association").String(),
+	}, body, nil)
+	if !ok {
 		return
 	}
 	writeOK(r, map[string]any{"ok": true})
 }
 
 func applySpecialCollectionQuery(r *ghttp.Request, db *md.Database, opts *md.CommonOptions) {
-	name := r.Get("collection").String()
+	name := r.GetRouter("collection").String()
+	if name == "" {
+		name = r.Get("collection").String()
+	}
 	coll := db.Collection(name)
 	if coll == nil {
 		return
@@ -460,7 +520,10 @@ func applySpecialCollectionQuery(r *ghttp.Request, db *md.Database, opts *md.Com
 }
 
 func (cc *CRUDController) Upload(r *ghttp.Request) {
-	name := r.Get("collection").String()
+	name := r.GetRouter("collection").String()
+	if _, ok := cc.dispatch(r, resourcemgr.ActionUpload, nil, nil, nil); !ok {
+		return
+	}
 	file := r.GetUploadFile("file")
 	if file == nil {
 		writeFail(r, http.StatusBadRequest, 1, "缺少 file 字段", nil)
@@ -481,7 +544,12 @@ func (cc *CRUDController) Upload(r *ghttp.Request) {
 }
 
 func (cc *CRUDController) FileContent(r *ghttp.Request) {
-	abs, mimeType, downloadName, err := cc.db.OpenFileObject(r.Context(), r.Get("collection").String(), parseID(r.Get("id").String()))
+	if _, ok := cc.dispatch(r, resourcemgr.ActionFileGet, map[string]any{
+		"id": parseID(r.GetRouter("id").String()),
+	}, nil, nil); !ok {
+		return
+	}
+	abs, mimeType, downloadName, err := cc.db.OpenFileObject(r.Context(), r.GetRouter("collection").String(), parseID(r.GetRouter("id").String()))
 	if err != nil {
 		writeLogicError(r, err)
 		return

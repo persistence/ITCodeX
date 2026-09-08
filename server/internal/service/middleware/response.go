@@ -36,6 +36,10 @@ func HandlerResponse(r *ghttp.Request) {
 		}
 		status := http.StatusOK
 		switch code {
+		case 400:
+			status = http.StatusBadRequest
+		case 401:
+			status = http.StatusUnauthorized
 		case 404:
 			status = http.StatusNotFound
 		case 409:

@@ -47,6 +47,8 @@ var defaultFieldFactories = map[FieldType]FieldFactory{
 	FieldTypeSequence:           wrapFactory(NewSequenceField),
 	FieldTypeUUID:               wrapFactory(NewUUIDField),
 	FieldTypeNanoID:             wrapFactory(NewNanoIDField),
+	FieldTypeCreatedBy:          func(coll *Collection, opts map[string]any) (Field, error) { return NewCreatedByField(coll, opts), nil },
+	FieldTypeUpdatedBy:          func(coll *Collection, opts map[string]any) (Field, error) { return NewUpdatedByField(coll, opts), nil },
 }
 
 func wrapFactory(f func(coll *Collection, opts map[string]any) (Field, error)) FieldFactory {

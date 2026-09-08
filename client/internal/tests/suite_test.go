@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -23,6 +24,11 @@ func setupTest(t *testing.T) *TestSuite {
 	t.Helper()
 	c := client.NewClient("")
 	ctx := context.Background()
+	if username := os.Getenv("TEST_USERNAME"); username != "" {
+		if _, err := c.Login(ctx, username, os.Getenv("TEST_PASSWORD")); err != nil {
+			t.Skipf("metadata login failed: %v", err)
+		}
+	}
 
 	// Skip entire suite when server is unreachable
 	if _, err := c.ListCollections(ctx); err != nil {

@@ -91,11 +91,14 @@ func (r *GenericRepository) applyFieldSelection(opts *CommonOptions) []Field {
 		exceptSet[e] = true
 	}
 
-	// Ensure primary key and timestamp fields are always available when explicit fields are selected
-	ensureSet := map[string]bool{DefaultPrimaryKey: true}
-	for _, sysName := range []string{"created_at", "updated_at"} {
-		if r.coll.HasField(sysName) {
-			ensureSet[sysName] = true
+	ensureSet := make(map[string]bool)
+	if !opts.StrictFields {
+		// Internal callers historically rely on these fields being available.
+		ensureSet[DefaultPrimaryKey] = true
+		for _, sysName := range []string{"created_at", "updated_at"} {
+			if r.coll.HasField(sysName) {
+				ensureSet[sysName] = true
+			}
 		}
 	}
 
@@ -211,6 +214,23 @@ func (r *GenericRepository) scanRows(rows *sql.Rows, fields []Field) ([]*Record,
 	}
 
 	return records, nil
+}
+
+func pruneRecordFields(records []*Record, fields Fields) {
+	allowed := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		allowed[field] = struct{}{}
+	}
+	for _, record := range records {
+		if record == nil {
+			continue
+		}
+		for _, key := range record.Keys() {
+			if _, ok := allowed[key]; !ok {
+				record.Remove(key)
+			}
+		}
+	}
 }
 
 func (r *GenericRepository) filterFieldsByWhitelist(data map[string]any, whitelist []string, blacklist []string) map[string]any {
@@ -371,6 +391,13 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 		values[k] = v
 	}
 
+	if err := authorizeRepository(ctx, r.coll.Name(), &RepositoryAccess{
+		Action: repositoryActionFromContext(ctx, "create"),
+		Values: values,
+	}); err != nil {
+		return nil, err
+	}
+
 	values = r.filterFieldsByWhitelist(values, opts.Whitelist, opts.Blacklist)
 	id, _ := r.applySystemFieldsForCreate(ctx, values)
 
@@ -407,6 +434,13 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if err := authorizeRepository(ctx, r.coll.Name(), &RepositoryAccess{
+		Action: repositoryActionFromContext(ctx, "create"),
+		Values: values,
+	}); err != nil {
+		return nil, err
 	}
 
 	columns, args, err := r.convertValuesToStore(values)
@@ -467,9 +501,10 @@ func (r *GenericRepository) Create(ctx context.Context, opts *CreateOptions) (*R
 	}
 
 	created := record
+	afterCommitCtx := context.WithoutCancel(ctx)
 	r.registerAfterCommit(ctx, func() {
 		if yaegi := r.coll.Db().Yaegi(); yaegi != nil && created != nil {
-			_ = yaegi.ExecuteAfterCommit(withAfterCommitRunning(context.Background()), r.coll, created)
+			_ = yaegi.ExecuteAfterCommit(withAfterCommitRunning(afterCommitCtx), r.coll, created)
 		}
 	})
 
@@ -489,7 +524,7 @@ func (r *GenericRepository) CreateMany(ctx context.Context, opts *CreateManyOpti
 			Whitelist:     opts.Whitelist,
 			Blacklist:     opts.Blacklist,
 		}
-		rec, err := r.Create(ctx, createOpts)
+		rec, err := r.Create(WithRepositoryAction(ctx, repositoryActionFromContext(ctx, "createMany")), createOpts)
 		if err != nil {
 			return records, err
 		}
@@ -503,17 +538,6 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 		opts = &FindOptions{}
 	}
 
-	fields := r.applyFieldSelection(&opts.CommonOptions)
-	if len(fields) == 0 {
-		return nil, nil
-	}
-
-	fieldNames := make([]string, len(fields))
-	for i, f := range fields {
-		fieldNames[i] = quoteIdent(f.Name())
-	}
-
-	var params []any
 	filter := opts.Filter
 	if filter == nil {
 		filter = make(Filter)
@@ -523,6 +547,44 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 		filter[DefaultPrimaryKey] = opts.FilterByTk
 	}
 
+	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
+		var err error
+		filter, err = yaegi.ExecuteBeforeFind(ctx, r.coll, filter)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	access := &RepositoryAccess{
+		Action:       repositoryActionFromContext(ctx, "list"),
+		Filter:       filter,
+		Fields:       opts.Fields,
+		Except:       opts.Except,
+		Sort:         opts.Sort,
+		Appends:      opts.Appends,
+		StrictFields: opts.StrictFields,
+	}
+	if err := authorizeRepository(ctx, r.coll.Name(), access); err != nil {
+		return nil, err
+	}
+	opts.Filter = access.Filter
+	opts.Fields = access.Fields
+	opts.Except = access.Except
+	opts.Sort = access.Sort
+	opts.Appends = access.Appends
+	opts.StrictFields = access.StrictFields
+	filter = access.Filter
+
+	fields := r.applyFieldSelection(&opts.CommonOptions)
+	if len(fields) == 0 {
+		return nil, nil
+	}
+	fieldNames := make([]string, len(fields))
+	for i, f := range fields {
+		fieldNames[i] = quoteIdent(f.Name())
+	}
+
+	var params []any
 	whereClause, err := BuildWhereClauseWithCollection(r.coll, filter, &params)
 	if err != nil {
 		return nil, err
@@ -583,6 +645,9 @@ func (r *GenericRepository) Find(ctx context.Context, opts *FindOptions) ([]*Rec
 	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
 		_ = yaegi.ExecuteAfterFind(ctx, r.coll, records)
 	}
+	if access.StrictFields {
+		pruneRecordFields(records, access.Fields)
+	}
 
 	return records, nil
 }
@@ -608,7 +673,7 @@ func (r *GenericRepository) FindOne(ctx context.Context, opts *FindOneOptions) (
 	}
 	findOpts.Filter = filter
 
-	records, err := r.Find(ctx, findOpts)
+	records, err := r.Find(WithRepositoryAction(ctx, repositoryActionFromContext(ctx, "get")), findOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -645,6 +710,23 @@ func (r *GenericRepository) Count(ctx context.Context, opts *CountOptions) (int,
 	if filter == nil {
 		filter = make(Filter)
 	}
+
+	if yaegi := r.coll.Db().Yaegi(); yaegi != nil {
+		var err error
+		filter, err = yaegi.ExecuteBeforeFind(ctx, r.coll, filter)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	access := &RepositoryAccess{
+		Action: repositoryActionFromContext(ctx, "count"),
+		Filter: filter,
+	}
+	if err := authorizeRepository(ctx, r.coll.Name(), access); err != nil {
+		return 0, err
+	}
+	filter = access.Filter
 
 	whereClause, err := BuildWhereClauseWithCollection(r.coll, filter, &params)
 	if err != nil {
@@ -727,6 +809,16 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 		filter[DefaultPrimaryKey] = singleId
 	}
 
+	access := &RepositoryAccess{
+		Action: repositoryActionFromContext(ctx, "update"),
+		Filter: filter,
+		Values: values,
+	}
+	if err := authorizeRepository(ctx, r.coll.Name(), access); err != nil {
+		return nil, 0, err
+	}
+	filter = access.Filter
+
 	// Fetch existing records for update validation (oldData)
 	var oldData map[string]any
 	if single {
@@ -759,6 +851,14 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 		if err != nil {
 			return nil, 0, err
 		}
+	}
+
+	finalAccess := &RepositoryAccess{
+		Action: repositoryActionFromContext(ctx, "update"),
+		Values: values,
+	}
+	if err := authorizeRepository(ctx, r.coll.Name(), finalAccess); err != nil {
+		return nil, 0, err
 	}
 
 	var setClauses []string
@@ -835,9 +935,10 @@ func (r *GenericRepository) Update(ctx context.Context, opts *UpdateOptions) (*R
 	}
 
 	committed := updatedRecord
+	afterCommitCtx := context.WithoutCancel(ctx)
 	r.registerAfterCommit(ctx, func() {
 		if yaegi := r.coll.Db().Yaegi(); yaegi != nil && committed != nil {
-			_ = yaegi.ExecuteAfterCommit(withAfterCommitRunning(context.Background()), r.coll, committed)
+			_ = yaegi.ExecuteAfterCommit(withAfterCommitRunning(afterCommitCtx), r.coll, committed)
 		}
 	})
 
@@ -858,11 +959,26 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 		return 0, fmt.Errorf("destroy options required")
 	}
 
-	var filter Filter
 	var params []any
 
 	emptyFilter := (opts.Filter == nil || len(opts.Filter) == 0) && opts.FilterByTk == nil
-	if opts.Truncate || (emptyFilter && r.coll.Db() != nil && r.coll.Db().AllowTruncate()) {
+	filter := opts.Filter
+	if filter == nil {
+		filter = make(Filter)
+	}
+	if opts.FilterByTk != nil {
+		filter[DefaultPrimaryKey] = opts.FilterByTk
+	}
+	access := &RepositoryAccess{
+		Action: repositoryActionFromContext(ctx, "destroy"),
+		Filter: filter,
+	}
+	if err := authorizeRepository(ctx, r.coll.Name(), access); err != nil {
+		return 0, err
+	}
+	filter = access.Filter
+
+	if (opts.Truncate || (emptyFilter && r.coll.Db() != nil && r.coll.Db().AllowTruncate())) && len(filter) == 0 {
 		if !opts.Truncate && (r.coll.Db() == nil || !r.coll.Db().AllowTruncate()) {
 			return 0, NewForbiddenError("禁止无条件清空表，请提供 filter 或开启 allowTruncate")
 		}
@@ -876,17 +992,8 @@ func (r *GenericRepository) Destroy(ctx context.Context, opts *DestroyOptions) (
 		return int(affected), nil
 	}
 
-	if emptyFilter {
+	if emptyFilter && len(filter) == 0 {
 		return 0, NewForbiddenError("禁止无条件清空表，请提供 filter 或开启 allowTruncate")
-	}
-
-	filter = opts.Filter
-	if filter == nil {
-		filter = make(Filter)
-	}
-
-	if opts.FilterByTk != nil {
-		filter[DefaultPrimaryKey] = opts.FilterByTk
 	}
 
 	if err := r.applyRelationOnDelete(ctx, filter); err != nil {

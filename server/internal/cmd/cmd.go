@@ -8,10 +8,12 @@ import (
 	"github.com/gogf/gf/v2/net/goai"
 	"github.com/gogf/gf/v2/os/gcmd"
 
+	controllerauth "itcodex/server/internal/controller/auth"
 	controllermd "itcodex/server/internal/controller/metadata"
-	"itcodex/server/internal/service/bizctx"
+	controllersecurity "itcodex/server/internal/controller/security"
 	md "itcodex/server/internal/service/metadata"
 	"itcodex/server/internal/service/middleware"
+	securitysvc "itcodex/server/internal/service/security"
 )
 
 var Main = gcmd.Command{
@@ -23,17 +25,27 @@ var Main = gcmd.Command{
 
 func mainFunc(ctx context.Context, _ *gcmd.Parser) error {
 	db := md.MustBootstrap(ctx)
+	security, err := securitysvc.Bootstrap(ctx, db)
+	if err != nil {
+		return err
+	}
 	s := g.Server()
-	s.Use(middleware.HandlerResponse, middleware.MetadataContext(db), ghttp.MiddlewareCORS)
+	s.Use(middleware.HandlerResponse, middleware.MetadataContext(db), ghttp.MiddlewareCORS, middleware.OptionalAuth(security.Auth))
 
 	s.Group("/api", func(group *ghttp.RouterGroup) {
-		group.Middleware(bizctx.Ctx)
-		group.Group("/meta", func(meta *ghttp.RouterGroup) {
-			meta.Bind(controllermd.NewV1(db))
+		group.Group("/auth", func(authGroup *ghttp.RouterGroup) {
+			authGroup.Bind(controllerauth.NewV1(security.Auth))
 		})
-		registerDynamicCRUD(group.Group("/c"), db)
+		group.Group("/meta", func(meta *ghttp.RouterGroup) {
+			meta.Middleware(securitysvc.MetaHTTPMiddleware(security.ACL))
+			meta.Bind(controllermd.NewV1(db))
+			meta.Group("/security", func(securityGroup *ghttp.RouterGroup) {
+				securityGroup.Bind(controllersecurity.NewV1(security.Store, security.ACL))
+			})
+		})
+		registerDynamicCRUD(group.Group("/c"), db, security)
 		group.Group("/custom", func(custom *ghttp.RouterGroup) {
-			custom.ALL("/*action", middleware.CustomAPIRouter(db))
+			custom.ALL("/*action", middleware.CustomAPIRouter(db, security.Resources))
 		})
 	})
 
@@ -42,8 +54,8 @@ func mainFunc(ctx context.Context, _ *gcmd.Parser) error {
 	return db.Close(ctx)
 }
 
-func registerDynamicCRUD(group *ghttp.RouterGroup, db *md.Database) {
-	cc := controllermd.NewCRUDController(db)
+func registerDynamicCRUD(group *ghttp.RouterGroup, db *md.Database, security *securitysvc.Runtime) {
+	cc := controllermd.NewCRUDController(db, security.Resources)
 	group.GET("/{collection}/count", cc.Count)
 	group.POST("/{collection}/batch", cc.CreateMany)
 	group.POST("/{collection}/upload", cc.Upload)

@@ -549,7 +549,7 @@ func (r *GenericRepository) ensureAssociatedRecord(ctx context.Context, f Field,
 		if target == nil {
 			return nil, fmt.Errorf("目标集合不存在: %s", ro.Target)
 		}
-		rec, err := target.Repository().Create(ctx, &CreateOptions{Values: m})
+		rec, err := target.Repository().Create(WithRepositoryAction(ctx, "create"), &CreateOptions{Values: m})
 		if err != nil {
 			return nil, err
 		}
@@ -627,6 +627,9 @@ func (r *GenericRepository) ListAssociation(ctx context.Context, sourceID any, a
 	if f == nil {
 		return nil, NewNotFoundError("关联字段", "name", association)
 	}
+	if err := r.authorizeAssociation(ctx, repositoryActionFromContext(ctx, "association:list"), sourceID, association, nil); err != nil {
+		return nil, err
+	}
 	rec, err := r.FindOne(ctx, &FindOneOptions{
 		CommonOptions: CommonOptions{Appends: Appends{association}},
 		FilterByTk:    sourceID,
@@ -661,6 +664,9 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID any, as
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
 	}
+	if err := r.authorizeAssociation(ctx, repositoryActionFromContext(ctx, "association:add"), sourceID, association, body); err != nil {
+		return err
+	}
 	ids, err := r.materializeAssociationIDs(ctx, f, body)
 	if err != nil {
 		return err
@@ -682,14 +688,13 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID any, as
 		if target == nil {
 			return fmt.Errorf("目标集合不存在: %s", ro.Target)
 		}
-		db := r.execDB(ctx)
 		for _, id := range ids {
 			id = normalizeAssocID(id)
-			_, err := db.Exec(ctx, fmt.Sprintf(`UPDATE %s SET %s = ? WHERE %s = ?`,
-				quoteIdent(target.TableName()), quoteIdent(ro.ForeignKey), quoteIdent(DefaultPrimaryKey)),
-				normalizeAssocID(sourceID), id)
-			if err != nil {
-				return NewSystemError(err)
+			if _, _, err := target.Repository().Update(WithRepositoryAction(ctx, "update"), &UpdateOptions{
+				FilterByTk: id,
+				Values:     map[string]any{ro.ForeignKey: normalizeAssocID(sourceID)},
+			}); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -699,7 +704,15 @@ func (r *GenericRepository) AddAssociation(ctx context.Context, sourceID any, as
 		}
 		db := r.execDB(ctx)
 		src := normalizeAssocID(sourceID)
+		target := r.coll.Db().Collection(ro.Target)
 		for _, id := range ids {
+			if target != nil {
+				if _, err := target.Repository().FindOne(WithRepositoryAction(ctx, "get"), &FindOneOptions{
+					FilterByTk: normalizeAssocID(id),
+				}); err != nil {
+					return err
+				}
+			}
 			_, err := db.Exec(ctx, fmt.Sprintf(`INSERT IGNORE INTO %s (%s, %s) VALUES (?, ?)`,
 				quoteIdent(ro.Through), quoteIdent(ro.ForeignKey), quoteIdent(ro.OtherKey)), src, normalizeAssocID(id))
 			if err != nil {
@@ -723,6 +736,9 @@ func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID any, as
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
 	}
+	if err := r.authorizeAssociation(ctx, repositoryActionFromContext(ctx, "association:set"), sourceID, association, body); err != nil {
+		return err
+	}
 	if body == nil {
 		return r.RemoveAssociation(ctx, sourceID, association, nil)
 	}
@@ -735,13 +751,21 @@ func (r *GenericRepository) SetAssociation(ctx context.Context, sourceID any, as
 		if target == nil {
 			return fmt.Errorf("目标集合不存在")
 		}
-		db := r.execDB(ctx)
 		src := normalizeAssocID(sourceID)
-		// clear existing
-		_, err := db.Exec(ctx, fmt.Sprintf(`UPDATE %s SET %s = NULL WHERE %s = ?`,
-			quoteIdent(target.TableName()), quoteIdent(ro.ForeignKey), quoteIdent(ro.ForeignKey)), src)
+		existing, err := target.Repository().Find(WithRepositoryAction(ctx, "list"), &FindOptions{
+			CommonOptions: CommonOptions{Filter: Filter{ro.ForeignKey: src}},
+			PageSize:      MaxPageSize,
+		})
 		if err != nil {
-			return NewSystemError(err)
+			return err
+		}
+		for _, record := range existing {
+			if _, _, err := target.Repository().Update(WithRepositoryAction(ctx, "update"), &UpdateOptions{
+				FilterByTk: record.Get(DefaultPrimaryKey),
+				Values:     map[string]any{ro.ForeignKey: nil},
+			}); err != nil {
+				return err
+			}
 		}
 		return r.AddAssociation(ctx, sourceID, association, body)
 	case FieldTypeBelongsToMany:
@@ -767,6 +791,9 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID any,
 	if f == nil {
 		return NewNotFoundError("关联字段", "name", association)
 	}
+	if err := r.authorizeAssociation(ctx, repositoryActionFromContext(ctx, "association:remove"), sourceID, association, body); err != nil {
+		return err
+	}
 	ro := GetRelationOptions(f)
 	ids := extractAssociationIDs(body)
 	switch FieldType(f.Type()) {
@@ -782,7 +809,7 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID any,
 			return fmt.Errorf("目标集合不存在")
 		}
 		if len(ids) == 0 {
-			existing, err := target.Repository().Find(ctx, &FindOptions{
+			existing, err := target.Repository().Find(WithRepositoryAction(ctx, "list"), &FindOptions{
 				CommonOptions: CommonOptions{Filter: Filter{ro.ForeignKey: sourceID}},
 				PageSize:      MaxPageSize,
 			})
@@ -794,7 +821,7 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID any,
 			}
 		}
 		for _, id := range ids {
-			_, _, err := target.Repository().Update(ctx, &UpdateOptions{
+			_, _, err := target.Repository().Update(WithRepositoryAction(ctx, "update"), &UpdateOptions{
 				FilterByTk: id,
 				Values:     map[string]any{ro.ForeignKey: nil},
 			})
@@ -824,4 +851,32 @@ func (r *GenericRepository) RemoveAssociation(ctx context.Context, sourceID any,
 	default:
 		return fmt.Errorf("不支持的关联类型: %s", f.Type())
 	}
+}
+
+func (r *GenericRepository) authorizeAssociation(ctx context.Context, action string, sourceID any, association string, body any) error {
+	access := &RepositoryAccess{
+		Action:  action,
+		Filter:  Filter{DefaultPrimaryKey: sourceID},
+		Appends: Appends{association},
+	}
+	if body != nil && action != "association:list" {
+		access.Values = map[string]any{association: body}
+	}
+	if err := authorizeRepository(ctx, r.coll.Name(), access); err != nil {
+		return err
+	}
+	var params []any
+	where, err := BuildWhereClauseWithCollection(r.coll, access.Filter, &params)
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE %s`, quoteIdent(r.coll.TableName()), where)
+	var count int
+	if err := r.execDB(ctx).QueryRow(ctx, query, params...).Scan(&count); err != nil {
+		return NewSystemError(err)
+	}
+	if count == 0 {
+		return NewNotFoundError("记录", DefaultPrimaryKey, sourceID)
+	}
+	return nil
 }
